@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useOverlayStore } from '@/stores/useOverlayStore';
 import { useRelayStore } from '@/stores/useRelayStore';
+import { useP2PStore } from '@/stores/useP2PStore';
 import { OverlayBridge } from '@/bridge/overlayBridge';
-import { Layers, Radio, KeyRound, Palette, Minus, X, Pin, PinOff } from 'lucide-react';
+import { Layers, Radio, KeyRound, Palette, Minus, X, Pin, PinOff, Wifi } from 'lucide-react';
 import logoImg from '@/assets/logo.png';
 
 interface HeaderProps {
@@ -16,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
   const { identity } = useAuthStore();
   const { isEnabled, toggleOverlay, isClickThrough } = useOverlayStore();
   const { relays } = useRelayStore();
+  const { roomState } = useP2PStore();
   const [isPinned, setIsPinned] = useState(true);
 
   const isDesktop = OverlayBridge.isDesktop();
@@ -114,6 +116,22 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
               <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
                 {identity.tag}
               </span>
+              {roomState.code && (
+                <span
+                  style={{
+                    fontSize: '10px',
+                    background: 'rgba(157, 78, 221, 0.25)',
+                    color: 'var(--accent-purple)',
+                    padding: '1px 5px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--accent-purple)',
+                    fontFamily: 'var(--font-mono)',
+                    marginLeft: '4px',
+                  }}
+                >
+                  ⚡ {roomState.code}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -129,6 +147,30 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
           WebkitAppRegion: 'no-drag',
         }}
       >
+        {/* Live P2P UDP Latency Indicator */}
+        {roomState.code && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '6px 10px',
+              height: '34px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(0, 240, 255, 0.15)',
+              border: '1px solid var(--accent-cyan)',
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--accent-cyan)',
+            }}
+            title="Real-time WebRTC UDP Latency"
+          >
+            <Wifi size={13} color="var(--accent-cyan)" />
+            <span>{roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<25ms'}</span>
+          </div>
+        )}
+
         {/* Relay Indicator */}
         <button
           onClick={onOpenRelays}

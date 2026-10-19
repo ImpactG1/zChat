@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useRelayStore } from '@/stores/useRelayStore';
 import { useThemeStore } from '@/stores/useThemeStore';
+import { useP2PStore } from '@/stores/useP2PStore';
 import { retryOutboxMessages } from '@/core/nostr/messageSender';
 import { nostrClient } from '@/core/nostr/client';
 import { GroupManager } from '@/core/groups/groupManager';
@@ -10,6 +11,7 @@ import { OverlayHUDBar } from '@/components/overlay/OverlayHUDBar';
 import { ConversationList } from '@/components/chat/ConversationList';
 import { ChatView } from '@/components/chat/ChatView';
 import { GroupChatView } from '@/components/groups/GroupChatView';
+import { SquadRoomView } from '@/components/p2p/SquadRoomView';
 import { RelayModal } from '@/components/settings/RelayModal';
 import { SeedBackupModal } from '@/components/settings/SeedBackupModal';
 import { ThemeSwitcherModal } from '@/components/settings/ThemeSwitcherModal';
@@ -19,9 +21,11 @@ export const App: React.FC = () => {
   const { identity, isInitialized, init } = useAuthStore();
   const { loadRelays } = useRelayStore();
   const { initTheme } = useThemeStore();
+  const { init: initP2P, roomState } = useP2PStore();
 
   const [activePubkey, setActivePubkey] = useState<string | undefined>();
   const [activeGroupId, setActiveGroupId] = useState<string | undefined>();
+  const [activeSquadCode, setActiveSquadCode] = useState<string | undefined>();
 
   const [showRelays, setShowRelays] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
@@ -31,6 +35,7 @@ export const App: React.FC = () => {
     init();
     initTheme();
     loadRelays();
+    initP2P();
 
     // Outbox background retry interval
     const retryTimer = setInterval(() => {
@@ -52,7 +57,14 @@ export const App: React.FC = () => {
       clearInterval(retryTimer);
       groupSubUnsubscribe();
     };
-  }, [init, initTheme, loadRelays]);
+  }, [init, initTheme, loadRelays, initP2P]);
+
+  // Keep active squad view in sync if room changes
+  useEffect(() => {
+    if (roomState.code && !activePubkey && !activeGroupId) {
+      setActiveSquadCode(roomState.code);
+    }
+  }, [roomState.code, activePubkey, activeGroupId]);
 
   if (!isInitialized) {
     return (
@@ -82,7 +94,11 @@ export const App: React.FC = () => {
 
       {/* Main View Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-        {activeGroupId ? (
+        {activeSquadCode ? (
+          <SquadRoomView
+            onBack={() => setActiveSquadCode(undefined)}
+          />
+        ) : activeGroupId ? (
           <GroupChatView
             groupId={activeGroupId}
             onBack={() => setActiveGroupId(undefined)}
@@ -96,13 +112,21 @@ export const App: React.FC = () => {
           <ConversationList
             activePubkey={activePubkey}
             activeGroupId={activeGroupId}
+            activeSquadCode={activeSquadCode}
             onSelectContact={(pubkey) => {
               setActivePubkey(pubkey);
               setActiveGroupId(undefined);
+              setActiveSquadCode(undefined);
             }}
             onSelectGroup={(groupId) => {
               setActiveGroupId(groupId);
               setActivePubkey(undefined);
+              setActiveSquadCode(undefined);
+            }}
+            onSelectSquad={(code) => {
+              setActiveSquadCode(code);
+              setActivePubkey(undefined);
+              setActiveGroupId(undefined);
             }}
           />
         )}

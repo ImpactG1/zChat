@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Sparkles, KeyRound, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
-
 import logoImg from '@/assets/logo.png';
 
 export const AuthModal: React.FC = () => {
   const { createAccount, importAccount } = useAuthStore();
-  const [mode, setMode] = useState<'welcome' | 'create' | 'import'>('welcome');
+  const [mode, setMode] = useState<'create' | 'import'>('create');
   const [handleInput, setHandleInput] = useState('');
   const [mnemonicInput, setMnemonicInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -66,88 +65,71 @@ export const AuthModal: React.FC = () => {
             zChat
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Serverless • Censorship-Resistant • Gamer HUD
+            Serverless • Direct P2P Mesh • Gamer HUD
           </p>
         </div>
 
-        {mode === 'welcome' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button
-              onClick={() => setMode('create')}
-              className="cyber-button"
-              style={{ padding: '14px', fontSize: '15px', justifyContent: 'space-between' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Sparkles size={18} color="var(--accent-cyan)" />
-                <span>Create New Identity</span>
-              </div>
-              <ArrowRight size={18} />
-            </button>
-
-            <button
-              onClick={() => setMode('import')}
-              className="cyber-button"
-              style={{ padding: '14px', fontSize: '15px', justifyContent: 'space-between', background: 'transparent', borderColor: 'var(--border-subtle)' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <KeyRound size={18} color="var(--accent-purple)" />
-                <span>Restore with 12-Word Seed</span>
-              </div>
-              <ArrowRight size={18} />
-            </button>
-
-            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
-              <ShieldCheck size={14} color="var(--accent-emerald)" />
-              No phone numbers • No email • No central servers
-            </div>
-          </div>
-        )}
-
-        {mode === 'create' && (
+        {mode === 'create' ? (
           <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
               <label style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>
-                Choose Your Gamer Handle
+                Choose Your Gamer Tag
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Viper, Shadow, Neon"
+                placeholder="e.g. zMayank, Viper, Ghost"
                 value={handleInput}
                 onChange={(e) => setHandleInput(e.target.value)}
                 className="cyber-input"
-                style={{ width: '100%', fontSize: '15px' }}
+                style={{ width: '100%', fontSize: '16px', fontWeight: 600 }}
                 autoFocus
               />
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                A 4-char cryptographic fingerprint (e.g. #3f8a) will be attached automatically.
+                Your cryptographic keys and session vault are initialized automatically.
               </span>
             </div>
 
-            <button type="submit" className="cyber-button" style={{ padding: '12px', fontSize: '15px', marginTop: '6px' }}>
-              Generate Seed & Launch
+            <button
+              type="submit"
+              className="cyber-button"
+              style={{
+                padding: '12px',
+                fontSize: '15px',
+                marginTop: '6px',
+                background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))',
+                color: '#fff',
+                justifyContent: 'center',
+              }}
+            >
+              <Sparkles size={16} />
+              <span>Launch zChat HUD</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setMode('welcome')}
+              onClick={() => setMode('import')}
               className="cyber-button"
-              style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--text-muted)', fontSize: '13px' }}
+              style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--text-secondary)', fontSize: '12px', justifyContent: 'center' }}
             >
-              Back
+              <KeyRound size={14} color="var(--accent-purple)" />
+              <span>Have an existing 12-word seed? Restore</span>
             </button>
-          </form>
-        )}
 
-        {mode === 'import' && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              <ShieldCheck size={14} color="var(--accent-emerald)" />
+              Zero servers • Direct encrypted peer-to-peer
+            </div>
+          </form>
+        ) : (
           <form onSubmit={handleImport} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
               <label style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>
-                Gamer Handle
+                Gamer Tag
               </label>
               <input
                 type="text"
-                placeholder="e.g. Viper"
+                placeholder="e.g. zMayank"
                 value={handleInput}
                 onChange={(e) => setHandleInput(e.target.value)}
                 className="cyber-input"
@@ -177,17 +159,18 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
-            <button type="submit" className="cyber-button" style={{ padding: '12px', fontSize: '15px' }}>
-              Restore Identity
+            <button type="submit" className="cyber-button" style={{ padding: '12px', fontSize: '15px', justifyContent: 'center' }}>
+              <span>Restore Identity</span>
+              <ArrowRight size={16} />
             </button>
 
             <button
               type="button"
-              onClick={() => setMode('welcome')}
+              onClick={() => setMode('create')}
               className="cyber-button"
-              style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--text-muted)', fontSize: '13px' }}
+              style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--text-muted)', fontSize: '13px', justifyContent: 'center' }}
             >
-              Back
+              Back to Create
             </button>
           </form>
         )}

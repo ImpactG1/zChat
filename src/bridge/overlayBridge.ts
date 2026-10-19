@@ -1,6 +1,19 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { OverlayConfig } from '@/types';
 
+declare global {
+  interface Window {
+    electronAPI?: {
+      isElectron: boolean;
+      minimize: () => void;
+      close: () => void;
+      setAlwaysOnTop: (isPinned: boolean) => void;
+      setOpacity: (opacityPercent: number) => void;
+      setClickThrough: (isEnabled: boolean) => void;
+    };
+  }
+}
+
 export interface ZChatOverlayPlugin {
   showOverlay(options?: { opacity?: number; isClickThrough?: boolean }): Promise<{ success: boolean }>;
   hideOverlay(): Promise<{ success: boolean }>;
@@ -16,11 +29,16 @@ const NativeOverlay = registerPlugin<ZChatOverlayPlugin>('ZChatOverlay');
 export class OverlayBridge {
   private static isNative = Capacitor.isNativePlatform();
 
+  public static isDesktop(): boolean {
+    return typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
+  }
+
   /**
-   * Checks if SYSTEM_ALERT_WINDOW permission is granted
+   * Checks if overlay permission is granted
    */
   public static async hasPermission(): Promise<boolean> {
-    if (!this.isNative) return true; // Web fallback
+    if (this.isDesktop()) return true;
+    if (!this.isNative) return true;
     try {
       const res = await NativeOverlay.checkOverlayPermission();
       return res.granted;
@@ -34,6 +52,7 @@ export class OverlayBridge {
    * Opens Android Settings page for "Display over other apps"
    */
   public static async requestPermission(): Promise<void> {
+    if (this.isDesktop()) return;
     if (!this.isNative) return;
     try {
       await NativeOverlay.requestOverlayPermission();
@@ -43,13 +62,22 @@ export class OverlayBridge {
   }
 
   /**
-   * Launches the persistent floating Chat Head bubble
+   * Launches the persistent floating Chat Head bubble / Desktop HUD
    */
   public static async show(config?: Partial<OverlayConfig>): Promise<boolean> {
+    if (this.isDesktop()) {
+      window.electronAPI?.setAlwaysOnTop(true);
+      if (config?.opacity !== undefined) {
+        window.electronAPI?.setOpacity(config.opacity);
+      }
+      return true;
+    }
+
     if (!this.isNative) {
       console.log('[Web HUD Simulator] Overlay shown with config:', config);
       return true;
     }
+
     try {
       const res = await NativeOverlay.showOverlay({
         opacity: config?.opacity ?? 85,
@@ -63,13 +91,19 @@ export class OverlayBridge {
   }
 
   /**
-   * Hides the floating bubble
+   * Hides the floating bubble / Desktop HUD
    */
   public static async hide(): Promise<boolean> {
+    if (this.isDesktop()) {
+      window.electronAPI?.setAlwaysOnTop(false);
+      return true;
+    }
+
     if (!this.isNative) {
       console.log('[Web HUD Simulator] Overlay hidden');
       return true;
     }
+
     try {
       const res = await NativeOverlay.hideOverlay();
       return res.success;
@@ -80,11 +114,16 @@ export class OverlayBridge {
   }
 
   /**
-   * Updates floating bubble opacity (Ghost Mode: 10% to 100%)
+   * Updates opacity (Ghost Mode: 15% to 100%)
    */
   public static async setOpacity(opacity: number): Promise<void> {
-    const clamped = Math.max(10, Math.min(100, opacity));
+    const clamped = Math.max(15, Math.min(100, opacity));
     document.documentElement.style.setProperty('--hud-opacity', `${clamped / 100}`);
+
+    if (this.isDesktop()) {
+      window.electronAPI?.setOpacity(clamped);
+      return;
+    }
 
     if (this.isNative) {
       try {
@@ -96,9 +135,14 @@ export class OverlayBridge {
   }
 
   /**
-   * Toggles Click-Through Mode (FLAG_NOT_TOUCHABLE)
+   * Toggles Click-Through Mode (pass clicks through to game)
    */
   public static async setClickThrough(enabled: boolean): Promise<void> {
+    if (this.isDesktop()) {
+      window.electronAPI?.setClickThrough(enabled);
+      return;
+    }
+
     if (this.isNative) {
       try {
         await NativeOverlay.setClickThrough({ enabled });

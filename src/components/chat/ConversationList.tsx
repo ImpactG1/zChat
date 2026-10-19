@@ -20,8 +20,23 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   onSelectGroup,
 }) => {
   const [tab, setTab] = useState<'direct' | 'groups'>('direct');
-  const contacts = useLiveQuery(() => db.contacts.orderBy('lastTimestamp').reverse().toArray()) ?? [];
-  const groups = useLiveQuery(() => db.groups.orderBy('lastTimestamp').reverse().toArray()) ?? [];
+  const contacts = useLiveQuery(async () => {
+    try {
+      const list = await db.contacts.toArray();
+      return list.sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
+    } catch {
+      return [];
+    }
+  }) ?? [];
+
+  const groups = useLiveQuery(async () => {
+    try {
+      const list = await db.groups.toArray();
+      return list.sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
+    } catch {
+      return [];
+    }
+  }) ?? [];
 
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);

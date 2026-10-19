@@ -19,7 +19,16 @@ export class ZChatDB extends Dexie {
     });
 
     this.version(2).stores({
-      contacts: 'pubkey, alias, unreadCount, isBlocked',
+      contacts: 'pubkey, alias, unreadCount, isBlocked, lastTimestamp',
+      messages: 'id, conversationId, timestamp, status, senderPubkey',
+      relays: 'url, isEnabled',
+      outbox: 'id, conversationId, timestamp',
+      groups: 'id, name, adminPubkey, lastTimestamp',
+      groupMessages: 'id, groupId, timestamp, senderPubkey',
+    });
+
+    this.version(3).stores({
+      contacts: 'pubkey, alias, unreadCount, isBlocked, lastTimestamp',
       messages: 'id, conversationId, timestamp, status, senderPubkey',
       relays: 'url, isEnabled',
       outbox: 'id, conversationId, timestamp',

@@ -53,7 +53,12 @@ class OverlayService : Service() {
             }
             ACTION_HIDE -> {
                 detachBubbleView()
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
                 stopSelf()
             }
             ACTION_SET_OPACITY -> {

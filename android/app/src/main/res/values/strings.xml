@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">zChat</string>
+    <string name="title_activity_main">zChat</string>
+    <string name="package_name">com.zchat.app</string>
+    <string name="custom_url_scheme">com.zchat.app</string>
+</resources>

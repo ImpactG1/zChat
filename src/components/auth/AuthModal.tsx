@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { Shield, Sparkles, KeyRound, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Sparkles, KeyRound, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+
+import logoImg from '@/assets/logo.png';
 
 export const AuthModal: React.FC = () => {
   const { createAccount, importAccount } = useAuthStore();
@@ -39,8 +41,26 @@ export const AuthModal: React.FC = () => {
       <div className="glass-panel-glow" style={{ width: '100%', maxWidth: '440px', padding: '28px', position: 'relative' }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))', boxShadow: '0 0 24px var(--accent-cyan-glow)', marginBottom: '16px' }}>
-            <Shield size={32} color="#080a0f" strokeWidth={2.5} />
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '84px',
+              height: '84px',
+              borderRadius: 'var(--radius-lg)',
+              overflow: 'hidden',
+              border: '2px solid var(--border-glow)',
+              boxShadow: '0 0 28px var(--accent-cyan-glow)',
+              background: '#04060a',
+              marginBottom: '16px',
+            }}
+          >
+            <img
+              src={logoImg}
+              alt="zChat Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
           <h1 style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '6px' }}>
             zChat

@@ -2,7 +2,8 @@ import React from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useOverlayStore } from '@/stores/useOverlayStore';
 import { useRelayStore } from '@/stores/useRelayStore';
-import { Shield, Layers, Radio, KeyRound, Palette } from 'lucide-react';
+import { Layers, Radio, KeyRound, Palette } from 'lucide-react';
+import logoImg from '@/assets/logo.png';
 
 interface HeaderProps {
   onOpenRelays: () => void;
@@ -21,8 +22,26 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
     <header className="glass-panel" style={{ margin: '8px 12px 4px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
       {/* Brand & User Tag */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))', boxShadow: '0 0 14px var(--accent-cyan-glow)' }}>
-          <Shield size={20} color="#080a0f" strokeWidth={2.5} />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '38px',
+            height: '38px',
+            borderRadius: 'var(--radius-md)',
+            overflow: 'hidden',
+            border: '1.5px solid var(--border-glow)',
+            boxShadow: '0 0 16px var(--accent-cyan-glow)',
+            background: '#04060a',
+          }}
+        >
+          <img
+            src={logoImg}
+            alt="zChat Logo"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
         </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

@@ -154,7 +154,7 @@ class OverlayService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("zChat Gamer HUD Active")
             .setContentText("Always-on-top chat head running")
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.zchat.app.R.drawable.ic_zchat_bubble)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

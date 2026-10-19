@@ -43,21 +43,21 @@ class FloatingBubbleView(
         layoutParams.x = 20
         layoutParams.y = (200 * density).toInt()
 
-        // Background: Cyber glass gradient circle with cyan border
+        // Background: Dark cyber glass circle with glowing cyan border
         val bgDrawable = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            colors = intArrayOf(Color.parseColor("#00F0FF"), Color.parseColor("#9D4EDD"))
+            colors = intArrayOf(Color.parseColor("#080A0F"), Color.parseColor("#0F1420"))
             orientation = GradientDrawable.Orientation.TL_BR
-            setStroke((2 * density).toInt(), Color.parseColor("#00F0FF"))
+            setStroke((2.5f * density).toInt(), Color.parseColor("#00F0FF"))
         }
         background = bgDrawable
         elevation = 16f * density
 
-        // Main Icon
+        // Main Icon: Custom metallic logo
         iconView = ImageView(context).apply {
-            setImageResource(android.R.drawable.ic_dialog_email)
-            setColorFilter(Color.parseColor("#080A0F"))
-            val padding = (12 * density).toInt()
+            setImageResource(com.zchat.app.R.drawable.ic_zchat_bubble)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            val padding = (4 * density).toInt()
             setPadding(padding, padding, padding, padding)
         }
         addView(iconView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

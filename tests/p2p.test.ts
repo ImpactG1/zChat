@@ -6,10 +6,12 @@ describe('P2P WebRTC Squad Mesh Engine', () => {
   it('initializes user and formats room codes correctly', () => {
     const fakeIdentity = {
       pubkey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      npub: 'npub10123456789abcdef',
       privkey: '1111111111111111111111111111111111111111111111111111111111111111',
       displayName: 'zMayank',
       tag: '#0123',
       mnemonic: 'test test test test test test test test test test test junk',
+      createdAt: Date.now(),
     };
 
     p2pManager.initUser(fakeIdentity);

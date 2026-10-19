@@ -2,14 +2,15 @@ import React from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useOverlayStore } from '@/stores/useOverlayStore';
 import { useRelayStore } from '@/stores/useRelayStore';
-import { Shield, Layers, Radio, KeyRound } from 'lucide-react';
+import { Shield, Layers, Radio, KeyRound, Palette } from 'lucide-react';
 
 interface HeaderProps {
   onOpenRelays: () => void;
   onOpenSeed: () => void;
+  onOpenThemes: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpenThemes }) => {
   const { identity } = useAuthStore();
   const { isEnabled, toggleOverlay, isClickThrough } = useOverlayStore();
   const { relays } = useRelayStore();
@@ -70,6 +71,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed }) => {
         >
           <Layers size={14} color={isEnabled ? 'var(--accent-cyan)' : 'var(--text-secondary)'} />
           <span>{isEnabled ? (isClickThrough ? 'GHOST' : 'HUD ON') : 'HUD'}</span>
+        </button>
+
+        {/* Themes & Backup */}
+        <button
+          onClick={onOpenThemes}
+          className="cyber-button"
+          style={{ padding: '6px 8px', height: '34px' }}
+          title="HUD Visual Themes & Backup"
+        >
+          <Palette size={15} color="var(--accent-cyan)" />
         </button>
 
         {/* Seed Backup */}

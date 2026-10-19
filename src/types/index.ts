@@ -60,3 +60,30 @@ export interface OutboxItem {
   timestamp: number;
   retryCount: number;
 }
+
+export interface GroupChat {
+  id: string;                // Group UUID / Topic ID
+  name: string;              // "Squad Alpha", "Raid Party", etc.
+  adminPubkey: string;       // Party Leader (controls membership & key rotation)
+  currentEpoch: number;      // Epoch index for key rotation
+  groupKeyHex: string;       // 32-byte shared epoch symmetric encryption key
+  members: string[];         // Member pubkeys
+  createdAt: number;
+  lastMessage?: string;
+  lastTimestamp?: number;
+  unreadCount: number;
+}
+
+export interface GroupMessage {
+  id: string;
+  groupId: string;
+  senderPubkey: string;
+  senderTag: string;
+  content: string;
+  timestamp: number;
+  epoch: number;
+  status: MessageDeliveryStatus;
+}
+
+export type GamerTheme = 'cyberpunk' | 'tactical' | 'crimson' | 'stealth';
+

@@ -63,6 +63,36 @@ class MessageReceiverService {
       // 2. Unwrap the onion gift wrap
       const unwrapped = unwrapDirectMessage(event, myPrivkey);
 
+      // Check if message is a Group Invite or Key Rotation
+      if (unwrapped.content.startsWith('{"type":"GROUP_INVITE"') || unwrapped.content.startsWith('{"type":"GROUP_KEY_ROTATION"')) {
+        try {
+          const payload = JSON.parse(unwrapped.content);
+          if (payload.type === 'GROUP_INVITE') {
+            await db.groups.put({
+              id: payload.groupId,
+              name: payload.name,
+              adminPubkey: payload.adminPubkey,
+              currentEpoch: payload.epoch || 1,
+              groupKeyHex: payload.groupKeyHex,
+              members: payload.members || [payload.adminPubkey, myPubkey],
+              createdAt: Date.now(),
+              lastMessage: 'Joined group party',
+              lastTimestamp: Date.now(),
+              unreadCount: 1,
+            });
+            return;
+          } else if (payload.type === 'GROUP_KEY_ROTATION') {
+            await db.groups.update(payload.groupId, {
+              groupKeyHex: payload.newKeyHex,
+              currentEpoch: payload.epoch,
+            });
+            return;
+          }
+        } catch {
+          // If JSON parse fails, treat as normal message
+        }
+      }
+
       // Check if sender is blocked
       const contact = await db.contacts.get(unwrapped.senderPubkey);
       if (contact && contact.isBlocked) {

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useP2PStore } from '@/stores/useP2PStore';
-import { Users, ArrowRight, ShieldAlert } from 'lucide-react';
+import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { BladeInput } from '@/components/design-system/BladeInput';
+import { IconClose } from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface JoinSquadModalProps {
   onClose: () => void;
@@ -16,98 +19,117 @@ export const JoinSquadModal: React.FC<JoinSquadModalProps> = ({ onClose, onSquad
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = squadCode.trim().toUpperCase();
-    if (!cleanCode) {
-      setErrorMsg('Please enter a squad code');
-      return;
-    }
+    if (!cleanCode) return;
 
     setIsJoining(true);
     setErrorMsg('');
+    SoundEngine.playSealChime();
     try {
       await joinSquad(cleanCode);
       onSquadJoined(cleanCode);
       onClose();
     } catch {
-      setErrorMsg('Failed to join squad room. Please check the code.');
+      setErrorMsg('Failed to locate peer mesh room. Check code.');
     } finally {
       setIsJoining(false);
     }
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
-      <div className="glass-panel-glow" style={{ width: '100%', maxWidth: '420px', padding: '24px', borderColor: 'var(--accent-cyan)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(0, 240, 255, 0.2)',
-              border: '1px solid var(--accent-cyan)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        zIndex: 100,
+      }}
+    >
+      <form
+        onSubmit={handleJoin}
+        className="anim-slice-in"
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+          background: 'var(--void-1)',
+          border: '1px solid rgba(255, 255, 255, 0.22)',
+          clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+          padding: '24px',
+          boxShadow: '0 8px 36px rgba(0, 0, 0, 0.95)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="tracked-micro">PEER DISCOVERY</span>
+          <button
+            type="button"
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onClose();
             }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
           >
-            <Users size={22} color="var(--accent-cyan)" />
-          </div>
-          <div>
-            <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Join Squad Party</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Enter 6-digit squad code from host</p>
-          </div>
+            <IconClose size={15} />
+          </button>
         </div>
 
-        <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>
-              Squad Party Code
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. SQUAD-77, ALPHA-9"
-              value={squadCode}
-              onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
-              className="cyber-input"
-              style={{
-                width: '100%',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '18px',
-                fontWeight: 700,
-                letterSpacing: '1px',
-                textAlign: 'center',
-              }}
-              autoFocus
-            />
-            {errorMsg && (
-              <div style={{ color: 'var(--accent-rose)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ShieldAlert size={14} />
-                {errorMsg}
-              </div>
-            )}
-          </div>
+        <h3
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '16px',
+            letterSpacing: '0.18em',
+            color: '#ffffff',
+            textTransform: 'uppercase',
+            margin: 0,
+          }}
+        >
+          ENTER SANCTUM CODE
+        </h3>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              className="cyber-button"
-              style={{ background: 'transparent' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isJoining || !squadCode.trim()}
-              className="cyber-button"
-            >
-              <span>{isJoining ? 'Connecting P2P...' : 'Join Squad'}</span>
-              <ArrowRight size={16} />
-            </button>
+        <BladeInput
+          label="6-DIGIT ROOM IDENTIFIER"
+          value={squadCode}
+          onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
+          placeholder="e.g. SQUAD-42, SANCTUM-99"
+          required
+          autoFocus
+        />
+
+        {errorMsg && (
+          <div style={{ color: 'var(--status-error)', fontSize: '11px' }}>
+            ✕ {errorMsg}
           </div>
-        </form>
-      </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <ChromeButton
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onClose();
+            }}
+          >
+            CANCEL
+          </ChromeButton>
+
+          <ChromeButton
+            variant="solid"
+            size="sm"
+            type="submit"
+            isLoading={isJoining}
+          >
+            JOIN MESH
+          </ChromeButton>
+        </div>
+      </form>
     </div>
   );
 };

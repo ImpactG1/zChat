@@ -12,12 +12,13 @@ body, html {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
+  background-color: var(--void-0);
+  color: var(--text-white);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -25,95 +26,248 @@ body, html {
   height: 100%;
   display: flex;
   flex-direction: column;
+  background-color: var(--void-0);
+  position: relative;
 }
 
-/* Custom Scrollbars */
+/* =========================================================================
+   SELECTION & SCROLLBAR
+   ========================================================================= */
+::selection {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 3px;
+  height: 3px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 1px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-cyan);
+  background: rgba(255, 255, 255, 0.4);
 }
 
-/* Glassmorphism Utilities */
-.glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+/* =========================================================================
+   TYPOGRAPHY UTILITIES
+   ========================================================================= */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
 }
 
-.glass-panel-glow {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-glow);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+.font-body {
+  font-family: var(--font-body);
 }
 
-.cyber-button {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(157, 78, 221, 0.15));
-  border: 1px solid var(--border-glow);
-  color: var(--text-highlight);
-  font-family: var(--font-sans);
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.tracked-micro {
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--text-muted);
   font-weight: 600;
-  padding: 10px 18px;
-  border-radius: var(--radius-md);
+}
+
+/* =========================================================================
+   CHROME & METALLIC SURFACES
+   ========================================================================= */
+.chrome-border {
+  border: 1px solid transparent;
+  background: 
+    linear-gradient(var(--void-2), var(--void-2)) padding-box,
+    var(--gradient-chrome-border) border-box;
+}
+
+.chrome-border-subtle {
+  border: 1px solid transparent;
+  background: 
+    linear-gradient(var(--void-1), var(--void-1)) padding-box,
+    var(--gradient-chrome-border-subtle) border-box;
+}
+
+.chrome-border-hover:hover {
+  border: 1px solid transparent;
+  background: 
+    linear-gradient(var(--void-3), var(--void-3)) padding-box,
+    var(--gradient-chrome-border) border-box;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
+}
+
+/* =========================================================================
+   ANGULAR CHAMFERS (Strict Non-Rounded Geometry)
+   ========================================================================= */
+.chamfer-sm {
+  clip-path: polygon(
+    6px 0,
+    100% 0,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0 100%,
+    0 6px
+  );
+}
+
+.chamfer-md {
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+
+/* Asymmetric Outgoing Message Bubble Chamfer */
+.chamfer-bubble-out {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 8px) 0,
+    100% 8px,
+    100% 100%,
+    8px 100%,
+    0 calc(100% - 8px)
+  );
+}
+
+/* Asymmetric Incoming Message Bubble Chamfer */
+.chamfer-bubble-in {
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+}
+
+/* =========================================================================
+   BUTTONS & INPUTS
+   ========================================================================= */
+.btn-chrome-solid {
+  background: var(--gradient-chrome-surface);
+  color: var(--text-inverse);
+  font-family: var(--font-display);
+  font-size: var(--text-caption);
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  padding: 10px 20px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform var(--transition-fast), filter var(--transition-fast);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.btn-chrome-solid:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+.btn-chrome-solid:active {
+  transform: translateY(1px);
+}
+
+.btn-chrome-outline {
+  background: rgba(11, 13, 17, 0.85);
+  color: var(--text-white);
+  font-family: var(--font-display);
+  font-size: var(--text-caption);
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  padding: 9px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   transition: all var(--transition-fast);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.btn-chrome-outline:hover {
+  border-color: rgba(255, 255, 255, 0.8);
+  background: rgba(18, 21, 28, 0.95);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
 }
 
-.cyber-button:hover {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.3), rgba(157, 78, 221, 0.3));
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 15px var(--accent-cyan-glow);
-  transform: translateY(-1px);
-}
-
-.cyber-button:active {
-  transform: translateY(1px);
-}
-
-.cyber-input {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 14px;
+/* Blade Input */
+.blade-input {
+  background: var(--void-1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-white);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
   padding: 10px 14px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-micro);
   outline: none;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   user-select: text;
+  width: 100%;
+}
+.blade-input:focus {
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.12);
 }
 
-.cyber-input:focus {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 12px var(--accent-cyan-glow);
-}
-
-/* Animations */
-@keyframes pulseGlow {
-  0%, 100% {
-    box-shadow: 0 0 12px var(--accent-cyan-glow);
+/* =========================================================================
+   ANIMATIONS & KEYFRAMES
+   ========================================================================= */
+@keyframes bladeSliceIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+    clip-path: inset(0 0 0 40%);
   }
-  50% {
-    box-shadow: 0 0 24px rgba(0, 240, 255, 0.6);
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: inset(0 0 0 0);
   }
 }
 
-.badge-glow {
-  animation: pulseGlow 2s infinite ease-in-out;
+.anim-slice-in {
+  animation: bladeSliceIn var(--duration-slice) var(--ease-slice) forwards;
+}
+
+@keyframes specularShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.anim-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: specularShimmer var(--duration-shimmer) infinite linear;
+}
+
+
+/* Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

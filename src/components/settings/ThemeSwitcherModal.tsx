@@ -3,7 +3,14 @@ import { useThemeStore } from '@/stores/useThemeStore';
 import { THEMES } from '@/styles/themes';
 import { GamerTheme } from '@/types';
 import { exportFullBackup, importFullBackup } from '@/core/storage/backup';
-import { Palette, Download, Upload, X, Check, CheckCircle2 } from 'lucide-react';
+import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { BladeDivider } from '@/components/design-system/BladeDivider';
+import { TrackedBadge } from '@/components/design-system/TrackedBadge';
+import {
+  IconSettingsGears,
+  IconClose,
+} from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface ThemeSwitcherModalProps {
   onClose: () => void;
@@ -13,14 +20,16 @@ export const ThemeSwitcherModal: React.FC<ThemeSwitcherModalProps> = ({ onClose 
   const { currentTheme, setTheme } = useThemeStore();
   const [backupSuccess, setBackupSuccess] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [soundMuted, setSoundMuted] = useState(() => SoundEngine.isSoundMuted());
 
   const handleExport = async () => {
+    SoundEngine.playBladeTick();
     const json = await exportFullBackup();
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `zchat-backup-${Date.now()}.json`;
+    a.download = `zenyth-vault-backup-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setBackupSuccess(true);
@@ -36,102 +45,185 @@ export const ThemeSwitcherModal: React.FC<ThemeSwitcherModalProps> = ({ onClose 
       const content = event.target?.result as string;
       const ok = await importFullBackup(content);
       if (ok) {
-        setImportStatus('Backup restored successfully! Reloading...');
+        SoundEngine.playSealChime();
+        setImportStatus('Sanctum vault restored successfully. Rekindling...');
         setTimeout(() => window.location.reload(), 1500);
       } else {
-        setImportStatus('Invalid backup JSON file.');
+        setImportStatus('Invalid covenant backup JSON.');
       }
     };
     reader.readAsText(file);
   };
 
+  const toggleSound = () => {
+    const next = !soundMuted;
+    setSoundMuted(next);
+    SoundEngine.setMuted(next);
+    if (!next) SoundEngine.playBladeTick();
+  };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
-      <div className="glass-panel-glow" style={{ width: '100%', maxWidth: '460px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        zIndex: 100,
+      }}
+    >
+      <div
+        className="anim-slice-in"
+        style={{
+          width: '100%',
+          maxWidth: '500px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          background: 'var(--void-1)',
+          border: '1px solid rgba(255, 255, 255, 0.22)',
+          clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
+          padding: '24px',
+          boxShadow: '0 12px 48px rgba(0, 0, 0, 0.95)',
+        }}
+      >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Palette size={20} color="var(--accent-cyan)" />
-            <h3 style={{ fontSize: '18px', fontWeight: 600 }}>HUD Themes & Backup</h3>
+            <IconSettingsGears size={18} color="var(--text-silver)" />
+            <h3
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '16px',
+                letterSpacing: '0.2em',
+                color: '#ffffff',
+                textTransform: 'uppercase',
+                margin: 0,
+              }}
+            >
+              SANCTUM PREFERENCES
+            </h3>
           </div>
           <button
-            onClick={onClose}
-            className="cyber-button"
-            style={{ padding: '6px', background: 'transparent', borderColor: 'transparent' }}
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onClose();
+            }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
           >
-            <X size={18} />
+            <IconClose size={16} />
           </button>
         </div>
 
-        {/* Theme Grid */}
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', display: 'block' }}>
-            Select Gaming Visual Theme
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-            {(Object.keys(THEMES) as GamerTheme[]).map((key) => {
-              const theme = THEMES[key];
-              const isSelected = currentTheme === key;
-              return (
-                <div
-                  key={key}
-                  onClick={() => setTheme(key)}
-                  style={{
-                    padding: '12px',
-                    borderRadius: 'var(--radius-md)',
-                    background: theme.bgCard,
-                    border: `1.5px solid ${isSelected ? theme.accentPrimary : 'var(--border-subtle)'}`,
-                    cursor: 'pointer',
-                    boxShadow: isSelected ? `0 0 14px ${theme.accentGlow}` : undefined,
-                    transition: 'all var(--transition-fast)',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{theme.name}</span>
-                    {isSelected && <Check size={14} color={theme.accentPrimary} />}
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: theme.accentPrimary }} />
-                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: theme.accentSecondary }} />
-                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: theme.bgPrimary, border: '1px solid #fff' }} />
-                  </div>
+        {/* Theme Palette Selection */}
+        <div className="tracked-micro" style={{ marginBottom: '10px' }}>
+          MONOLITHIC VISUAL PALETTE
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '20px' }}>
+          {(Object.keys(THEMES) as GamerTheme[]).map((key) => {
+            const t = THEMES[key];
+            const isSelected = currentTheme === key;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  SoundEngine.playBladeTick();
+                  setTheme(key);
+                }}
+                style={{
+                  background: t.bgPrimary,
+                  border: isSelected ? '1px solid rgba(255, 255, 255, 0.7)' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '12px',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  boxShadow: isSelected ? '0 0 14px rgba(255, 255, 255, 0.12)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '11px', letterSpacing: '0.12em', color: '#ffffff', fontWeight: 700, textTransform: 'uppercase' }}>
+                    {t.name}
+                  </span>
+                  {isSelected && <TrackedBadge label="ACTIVE" variant="chrome" />}
                 </div>
-              );
-            })}
-          </div>
+
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <div style={{ width: '12px', height: '12px', background: t.accentPrimary, border: '1px solid rgba(255,255,255,0.2)' }} />
+                  <div style={{ width: '12px', height: '12px', background: t.accentSecondary, border: '1px solid rgba(255,255,255,0.2)' }} />
+                  <div style={{ width: '12px', height: '12px', background: t.bgCard, border: '1px solid rgba(255,255,255,0.2)' }} />
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Backup & Restore */}
-        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px', display: 'block' }}>
-            Data Backup & Migration
+        <BladeDivider label="AUDIO & SENSORY" />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0' }}>
+          <div>
+            <div style={{ fontSize: '13px', color: '#ffffff', fontWeight: 600 }}>Synthesized Blade Audio</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Low-latency Web Audio API metallic strike & chime</div>
+          </div>
+          <button
+            onClick={toggleSound}
+            style={{
+              padding: '6px 12px',
+              background: !soundMuted ? 'rgba(255, 255, 255, 0.14)' : 'var(--void-2)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              color: '#ffffff',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              cursor: 'pointer',
+              borderRadius: '2px',
+            }}
+          >
+            {!soundMuted ? 'ENABLED' : 'MUTED'}
+          </button>
+        </div>
+
+        <BladeDivider label="VAULT BACKUP & PORTABILITY" />
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+          <ChromeButton variant="outline" size="sm" onClick={handleExport} style={{ flex: 1 }}>
+            {backupSuccess ? 'VAULT EXPORTED' : 'EXPORT BACKUP JSON'}
+          </ChromeButton>
+
+          <label
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--void-2)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#ffffff',
+              fontFamily: 'var(--font-display)',
+              fontSize: '11px',
+              letterSpacing: '0.15em',
+              cursor: 'pointer',
+              padding: '6px 12px',
+              borderRadius: '2px',
+              textTransform: 'uppercase',
+              minHeight: '32px',
+            }}
+          >
+            IMPORT BACKUP
+            <input type="file" accept=".json" onChange={handleImportFile} style={{ display: 'none' }} />
           </label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={handleExport}
-              className="cyber-button"
-              style={{ flex: 1, padding: '10px', fontSize: '12px' }}
-            >
-              {backupSuccess ? <CheckCircle2 size={15} color="var(--accent-emerald)" /> : <Download size={15} />}
-              <span>{backupSuccess ? 'Downloaded!' : 'Export Backup'}</span>
-            </button>
-
-            <label
-              className="cyber-button"
-              style={{ flex: 1, padding: '10px', fontSize: '12px', cursor: 'pointer', background: 'transparent' }}
-            >
-              <Upload size={15} />
-              <span>Import Backup</span>
-              <input type="file" accept=".json" onChange={handleImportFile} style={{ display: 'none' }} />
-            </label>
-          </div>
-          {importStatus && (
-            <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--accent-cyan)', textAlign: 'center' }}>
-              {importStatus}
-            </div>
-          )}
         </div>
+
+        {importStatus && (
+          <div style={{ fontSize: '12px', color: 'var(--status-online)', marginTop: '10px', textAlign: 'center' }}>
+            {importStatus}
+          </div>
+        )}
       </div>
     </div>
   );

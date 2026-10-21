@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useP2PStore } from '@/stores/useP2PStore';
-import { Sparkles, Radio } from 'lucide-react';
+import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { BladeInput } from '@/components/design-system/BladeInput';
+import { IconClose } from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface HostSquadModalProps {
   onClose: () => void;
@@ -9,7 +12,7 @@ interface HostSquadModalProps {
 
 export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquadCreated }) => {
   const { createSquad } = useP2PStore();
-  const defaultCode = `SQUAD-${Math.floor(10 + Math.random() * 90)}`;
+  const defaultCode = `SANCTUM-${Math.floor(10 + Math.random() * 90)}`;
   const [squadCode, setSquadCode] = useState(defaultCode);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -18,6 +21,7 @@ export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquad
     if (!squadCode.trim()) return;
 
     setIsCreating(true);
+    SoundEngine.playSealChime();
     try {
       const code = await createSquad(squadCode.trim());
       onSquadCreated(code);
@@ -28,79 +32,98 @@ export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquad
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
-      <div className="glass-panel-glow" style={{ width: '100%', maxWidth: '420px', padding: '24px', borderColor: 'var(--accent-purple)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(157, 78, 221, 0.2)',
-              border: '1px solid var(--accent-purple)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        zIndex: 100,
+      }}
+    >
+      <form
+        onSubmit={handleCreate}
+        className="anim-slice-in"
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+          background: 'var(--void-1)',
+          border: '1px solid rgba(255, 255, 255, 0.22)',
+          clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+          padding: '24px',
+          boxShadow: '0 8px 36px rgba(0, 0, 0, 0.95)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="tracked-micro">DIRECT P2P MESH</span>
+          <button
+            type="button"
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onClose();
             }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
           >
-            <Radio size={22} color="var(--accent-purple)" />
-          </div>
-          <div>
-            <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Host Squad Party</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Direct sub-30ms P2P UDP Mesh across India</p>
-          </div>
+            <IconClose size={15} />
+          </button>
         </div>
 
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>
-              6-Character Squad Party Code
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                required
-                maxLength={12}
-                value={squadCode}
-                onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
-                className="cyber-input"
-                style={{
-                  width: '100%',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '18px',
-                  fontWeight: 700,
-                  letterSpacing: '1px',
-                  textAlign: 'center',
-                  borderColor: 'var(--accent-purple)',
-                }}
-              />
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Share this short code with your teammates in any city. No 64-char crypto keys required!
-            </span>
-          </div>
+        <h3
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '16px',
+            letterSpacing: '0.18em',
+            color: '#ffffff',
+            textTransform: 'uppercase',
+            margin: 0,
+          }}
+        >
+          HOST SANCTUM MESH
+        </h3>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              className="cyber-button"
-              style={{ background: 'transparent' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isCreating || !squadCode.trim()}
-              className="cyber-button"
-              style={{ background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }}
-            >
-              <Sparkles size={16} />
-              <span>{isCreating ? 'Initializing...' : 'Launch Squad'}</span>
-            </button>
-          </div>
-        </form>
-      </div>
+        <BladeInput
+          label="SANCTUM PARTY CODE"
+          value={squadCode}
+          onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
+          placeholder="e.g. SANCTUM-99"
+          required
+          autoFocus
+        />
+
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+          Hosts an instantaneous sub-25ms WebRTC direct mesh room without server relay intermediaries.
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <ChromeButton
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onClose();
+            }}
+          >
+            CANCEL
+          </ChromeButton>
+
+          <ChromeButton
+            variant="solid"
+            size="sm"
+            type="submit"
+            isLoading={isCreating}
+          >
+            IGNITE MESH
+          </ChromeButton>
+        </div>
+      </form>
     </div>
   );
 };

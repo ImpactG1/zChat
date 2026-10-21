@@ -1,50 +1,160 @@
 :root {
-  /* Dark Gaming & Cyber Palette */
-  --bg-primary: #080a0f;
-  --bg-secondary: #0f131a;
-  --bg-tertiary: #171c26;
-  --bg-card: rgba(18, 24, 38, 0.75);
-  --bg-card-hover: rgba(28, 36, 56, 0.85);
-  --bg-glass: rgba(12, 16, 26, 0.65);
+  /* =========================================================================
+     ELEVATION & SURFACES (Pure Black to Deep Graphite Void)
+     ========================================================================= */
+  --void-0: #000000;         /* Ground base, pure pitch black */
+  --void-1: #050608;         /* Sub-surface / sidebar background */
+  --void-2: #0b0d11;         /* Card / panel surface */
+  --void-3: #12151c;         /* Elevated surface / hover states / dialogs */
+  --void-4: #191d26;         /* Tooltip / popup active layer */
 
-  /* Cyber Accents */
-  --accent-cyan: #00f0ff;
-  --accent-cyan-glow: rgba(0, 240, 255, 0.35);
-  --accent-purple: #9d4edd;
-  --accent-purple-glow: rgba(157, 78, 221, 0.35);
-  --accent-emerald: #10b981;
-  --accent-emerald-glow: rgba(16, 185, 129, 0.35);
-  --accent-rose: #f43f5e;
-  --accent-amber: #f59e0b;
+  /* Aliases for system integration */
+  --bg-primary: var(--void-0);
+  --bg-secondary: var(--void-1);
+  --bg-tertiary: var(--void-2);
+  --bg-card: var(--void-2);
+  --bg-card-hover: var(--void-3);
+  --bg-glass: rgba(11, 13, 17, 0.72);
 
-  /* Text & Contrast */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-highlight: #ffffff;
+  /* =========================================================================
+     CHROME & METALLIC GRADIENTS (Liquid Chrome System)
+     ========================================================================= */
+  --chrome-highlight: #ffffff;
+  --chrome-sheen: #dcdfe4;
+  --chrome-mid: #7e8490;
+  --chrome-shadow: #282b32;
+  --chrome-deep: #14161a;
 
-  /* Borders & Glass */
+  /* Metallic Borders & Surfaces */
+  --gradient-chrome-border: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(126, 132, 144, 0.2) 35%,
+    rgba(20, 22, 26, 0.7) 70%,
+    rgba(255, 255, 255, 0.3) 100%
+  );
+  --gradient-chrome-border-subtle: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(126, 132, 144, 0.08) 50%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  --gradient-chrome-surface: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #a8adb7 30%,
+    #5a606c 70%,
+    #2c3038 100%
+  );
+  --gradient-chrome-specular: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.0) 25%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.0) 75%,
+    transparent 100%
+  );
+  --gradient-blade-line: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 25%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0.25) 75%,
+    transparent 100%
+  );
+
+  /* Light Accent replacements (NO CYAN, NO PURPLE) */
+  --accent-cyan: #e8ecf2;
+  --accent-cyan-glow: rgba(255, 255, 255, 0.25);
+  --accent-purple: #9aa1ad;
+  --accent-purple-glow: rgba(220, 223, 228, 0.2);
   --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(0, 240, 255, 0.25);
-  --border-active: rgba(0, 240, 255, 0.6);
+  --border-glow: rgba(255, 255, 255, 0.25);
+  --border-active: rgba(255, 255, 255, 0.75);
 
-  /* HUD Specific */
-  --hud-bg-translucent: rgba(10, 14, 22, var(--hud-opacity, 0.85));
-  --hud-border: rgba(0, 240, 255, 0.3);
+  /* =========================================================================
+     TYPOGRAPHY TOKENS
+     ========================================================================= */
+  --font-display: 'Cinzel', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-body);
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  /* Strict Type Scale */
+  --text-micro: 10px;       /* Tracking: 0.3em, uppercase */
+  --text-caption: 12px;     /* Tracking: 0.08em */
+  --text-body-sm: 13px;     /* Tracking: 0.01em */
+  --text-body: 14px;        /* Tracking: 0.01em, line-height: 1.55 */
+  --text-subhead: 16px;     /* Tracking: 0.08em */
+  --text-title: 20px;       /* Tracking: 0.18em, Display */
+  --text-monumental: 36px;  /* Tracking: 0.25em, Display */
+
+  /* Text Contrast Hierarchy (Strict Monochrome) */
+  --text-white: #f5f7fa;     /* Primary readable copy (WCAG AAA) */
+  --text-primary: var(--text-white);
+  --text-silver: #dcdfe4;    /* Secondary highlighted elements */
+  --text-secondary: #8c93a0;  /* Secondary metadata & timestamps */
+  --text-muted: #555b66;     /* Tertiary labels */
+  --text-faint: #343840;     /* Ghosted accents & guide indicators */
+  --text-highlight: #ffffff;
+  --text-inverse: #050608;   /* On pure chrome buttons */
+
+  /* =========================================================================
+     FUNCTIONAL STATUS COLORS (Muted & Desaturated)
+     ========================================================================= */
+  --status-online: #e8ecf2;        /* Icy silver-white star */
+  --status-relay-ok: #528068;      /* Desaturated obsidian sage */
+  --status-warning: #99733e;       /* Desaturated oxidized bronze */
+  --status-error: #8b3434;         /* Desaturated dried crimson */
+  --status-encrypted: #a6b2c2;     /* Sealed platinum sigil */
+
+  /* Legacy mappings */
+  --accent-emerald: var(--status-relay-ok);
+  --accent-emerald-glow: rgba(82, 128, 104, 0.3);
+  --accent-rose: var(--status-error);
+  --accent-amber: var(--status-warning);
+
+  /* =========================================================================
+     GEOMETRY & SPACING (4px/8px Rhythm)
+     ========================================================================= */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-sharp: 0px;
+  --radius-micro: 2px;
+  --radius-chamfer: 6px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+  --hairline: 1px;
+
+  /* =========================================================================
+     HUD OVERLAY SPECIFIC
+     ========================================================================= */
+  --hud-bg-translucent: rgba(5, 6, 8, var(--hud-opacity, 0.88));
+  --hud-border: rgba(255, 255, 255, 0.28);
   --hud-blur: 16px;
 
-  /* Typography */
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  /* =========================================================================
+     MOTION & WEIGHT (Cinematic & Razor Fast)
+     ========================================================================= */
+  --ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-slice: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-blade: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-slice: 160ms;
+  --duration-fast: 140ms;
+  --duration-normal: 260ms;
+  --duration-drift: 12000ms;
+  --duration-shimmer: 2400ms;
 
-  /* Layout & Sizing */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-full: 9999px;
-
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --transition-fast: 140ms var(--ease-slice);
+  --transition-normal: 260ms var(--ease-cinematic);
+  --transition-spring: 400ms var(--spring-blade);
 }

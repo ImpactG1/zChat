@@ -7,7 +7,7 @@ import { retryOutboxMessages } from '@/core/nostr/messageSender';
 import { nostrClient } from '@/core/nostr/client';
 import { GroupManager } from '@/core/groups/groupManager';
 import { Header } from '@/components/common/Header';
-import { OverlayHUDBar } from '@/components/overlay/OverlayHUDBar';
+import { FloatingOverlayHUD } from '@/components/overlay/FloatingOverlayHUD';
 import { ConversationList } from '@/components/chat/ConversationList';
 import { ChatView } from '@/components/chat/ChatView';
 import { GroupChatView } from '@/components/groups/GroupChatView';
@@ -15,13 +15,27 @@ import { SquadRoomView } from '@/components/p2p/SquadRoomView';
 import { RelayModal } from '@/components/settings/RelayModal';
 import { SeedBackupModal } from '@/components/settings/SeedBackupModal';
 import { ThemeSwitcherModal } from '@/components/settings/ThemeSwitcherModal';
-import { AuthModal } from '@/components/auth/AuthModal';
+import { SplashOnboarding } from '@/components/auth/SplashOnboarding';
+import { DesignShowcase } from '@/components/design-system/DesignShowcase';
+import { DesktopLayout } from '@/components/desktop/DesktopLayout';
+import { CommandPalette } from '@/components/common/CommandPalette';
+import { useOverlayStore } from '@/stores/useOverlayStore';
 
 export const App: React.FC = () => {
   const { identity, isInitialized, init } = useAuthStore();
   const { loadRelays } = useRelayStore();
   const { initTheme } = useThemeStore();
   const { init: initP2P, roomState } = useP2PStore();
+  const { toggleOverlay } = useOverlayStore();
+
+  const [isDesignRoute, setIsDesignRoute] = useState(() => {
+    return (
+      typeof window !== 'undefined' &&
+      (window.location.pathname === '/design' ||
+        window.location.hash === '#design' ||
+        window.location.search.includes('design'))
+    );
+  });
 
   const [activePubkey, setActivePubkey] = useState<string | undefined>();
   const [activeGroupId, setActiveGroupId] = useState<string | undefined>();
@@ -30,6 +44,68 @@ export const App: React.FC = () => {
   const [showRelays, setShowRelays] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth >= 960;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktopLayout(window.innerWidth >= 960);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleCommandAction = (actionKey: string) => {
+    switch (actionKey) {
+      case 'toggle_overlay':
+        toggleOverlay();
+        break;
+      case 'relays':
+        setShowRelays(true);
+        break;
+      case 'backup':
+        setShowSeed(true);
+        break;
+      case 'settings':
+        setShowThemes(true);
+        break;
+      case 'new_whisper':
+      case 'new_sanctum':
+        setActivePubkey(undefined);
+        setActiveGroupId(undefined);
+        break;
+    }
+  };
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      setIsDesignRoute(
+        window.location.pathname === '/design' ||
+        window.location.hash === '#design' ||
+        window.location.search.includes('design')
+      );
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
 
   useEffect(() => {
     init();
@@ -66,18 +142,55 @@ export const App: React.FC = () => {
     }
   }, [roomState.code, activePubkey, activeGroupId]);
 
+  if (isDesignRoute) {
+    return (
+      <DesignShowcase
+        onExit={() => {
+          window.location.hash = '';
+          window.history.pushState(null, '', '/');
+          setIsDesignRoute(false);
+        }}
+      />
+    );
+  }
+
   if (!isInitialized) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
-        <div style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '14px' }}>
-          Initializing zChat...
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--void-0)' }}>
+        <div style={{ color: 'var(--text-white)', fontFamily: 'var(--font-display)', letterSpacing: '0.25em', fontSize: '13px' }}>
+          FORGING ZENYTH SANCTUM...
         </div>
       </div>
     );
   }
 
   if (!identity) {
-    return <AuthModal />;
+    return (
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <SplashOnboarding />
+        {/* Quick link to Design Showcase during development */}
+        <button
+          onClick={() => setIsDesignRoute(true)}
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            right: '16px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            color: '#ffffff',
+            padding: '6px 12px',
+            fontFamily: 'var(--font-display)',
+            fontSize: '10px',
+            letterSpacing: '0.2em',
+            cursor: 'pointer',
+            zIndex: 9999,
+            borderRadius: '2px',
+          }}
+        >
+          ⚔ DESIGN SHOWCASE (/design)
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -89,12 +202,41 @@ export const App: React.FC = () => {
         onOpenThemes={() => setShowThemes(true)}
       />
 
-      {/* Gamer HUD Opacity & Click-Through Controller */}
-      <OverlayHUDBar />
+      {/* Floating Zenyth Overlay HUD (Bubble, Mini, Full Panel) */}
+      <FloatingOverlayHUD />
 
       {/* Main View Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-        {activeSquadCode ? (
+        {isDesktopLayout ? (
+          <DesktopLayout
+            activePubkey={activePubkey}
+            activeGroupId={activeGroupId}
+            activeSquadCode={activeSquadCode}
+            onSelectContact={(pubkey) => {
+              setActivePubkey(pubkey);
+              setActiveGroupId(undefined);
+              setActiveSquadCode(undefined);
+            }}
+            onSelectGroup={(groupId) => {
+              setActiveGroupId(groupId);
+              setActivePubkey(undefined);
+              setActiveSquadCode(undefined);
+            }}
+            onSelectSquad={(code) => {
+              setActiveSquadCode(code);
+              setActivePubkey(undefined);
+              setActiveGroupId(undefined);
+            }}
+            onBack={() => {
+              setActivePubkey(undefined);
+              setActiveGroupId(undefined);
+              setActiveSquadCode(undefined);
+            }}
+            onOpenRelays={() => setShowRelays(true)}
+            onOpenSeed={() => setShowSeed(true)}
+            onOpenCommandPalette={() => setShowCommandPalette(true)}
+          />
+        ) : activeSquadCode ? (
           <SquadRoomView
             onBack={() => setActiveSquadCode(undefined)}
           />
@@ -132,10 +274,41 @@ export const App: React.FC = () => {
         )}
       </main>
 
+      {/* Command Palette (Ctrl+K) */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onAction={handleCommandAction}
+      />
+
       {/* Modals */}
       {showRelays && <RelayModal onClose={() => setShowRelays(false)} />}
       {showSeed && <SeedBackupModal onClose={() => setShowSeed(false)} />}
       {showThemes && <ThemeSwitcherModal onClose={() => setShowThemes(false)} />}
+
+      {/* Quick link to /design showcase */}
+      <button
+        onClick={() => setIsDesignRoute(true)}
+        style={{
+          position: 'fixed',
+          bottom: '12px',
+          right: '12px',
+          background: 'var(--void-3)',
+          border: '1px solid rgba(255, 255, 255, 0.35)',
+          color: '#ffffff',
+          padding: '6px 12px',
+          fontFamily: 'var(--font-display)',
+          fontSize: '10px',
+          letterSpacing: '0.2em',
+          cursor: 'pointer',
+          zIndex: 9999,
+          borderRadius: '2px',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.8)',
+        }}
+        title="Open Zenyth Design Showcase"
+      >
+        ⚔ /design
+      </button>
     </div>
   );
 };

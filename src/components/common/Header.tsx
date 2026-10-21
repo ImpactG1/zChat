@@ -4,8 +4,16 @@ import { useOverlayStore } from '@/stores/useOverlayStore';
 import { useRelayStore } from '@/stores/useRelayStore';
 import { useP2PStore } from '@/stores/useP2PStore';
 import { OverlayBridge } from '@/bridge/overlayBridge';
-import { Layers, Radio, KeyRound, Palette, Minus, X, Pin, PinOff, Wifi } from 'lucide-react';
-import logoImg from '@/assets/logo.png';
+import { EmblemLogo } from '@/components/common/EmblemLogo';
+import {
+  IconRelayTower,
+  IconKeyVault,
+  IconSettingsGears,
+  IconBubbleOverlay,
+  IconClose,
+  IconSearchLoupe,
+} from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface HeaderProps {
   onOpenRelays: () => void;
@@ -19,19 +27,23 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
   const { relays } = useRelayStore();
   const { roomState } = useP2PStore();
   const [isPinned, setIsPinned] = useState(true);
+  const [soundMuted, setSoundMuted] = useState(() => SoundEngine.isSoundMuted());
 
   const isDesktop = OverlayBridge.isDesktop();
   const connectedCount = relays.filter((r) => r.status === 'connected').length;
 
   const handleMinimize = () => {
+    SoundEngine.playBladeTick();
     window.electronAPI?.minimize();
   };
 
   const handleClose = () => {
+    SoundEngine.playBladeTick();
     window.electronAPI?.close();
   };
 
   const handleTogglePin = () => {
+    SoundEngine.playBladeTick();
     const next = !isPinned;
     setIsPinned(next);
     window.electronAPI?.setAlwaysOnTop(next);
@@ -39,97 +51,93 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
 
   return (
     <header
-      className="glass-panel"
       style={{
-        margin: '8px 12px 4px',
-        padding: '10px 14px',
+        margin: '6px 12px 4px',
+        padding: '8px 14px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        zIndex: 10,
+        background: 'var(--void-1)',
+        border: '1px solid rgba(255, 255, 255, 0.14)',
+        clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+        zIndex: 50,
         // @ts-ignore
         WebkitAppRegion: isDesktop ? 'drag' : 'no-drag',
       }}
     >
       {/* Brand & User Tag */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '38px',
-            height: '38px',
-            borderRadius: 'var(--radius-md)',
-            overflow: 'hidden',
-            border: '1.5px solid var(--border-glow)',
-            boxShadow: '0 0 16px var(--accent-cyan-glow)',
-            background: '#04060a',
-          }}
-        >
-          <img
-            src={logoImg}
-            alt="zChat Logo"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <EmblemLogo size={38} glow shimmer />
+
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               style={{
-                fontWeight: 700,
-                fontSize: '16px',
-                letterSpacing: '0.5px',
-                background: 'linear-gradient(90deg, #fff, var(--accent-cyan))',
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: '15px',
+                letterSpacing: '0.24em',
+                background: 'linear-gradient(180deg, #FFFFFF 0%, #D4D8DD 60%, #8A929B 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
+                textTransform: 'uppercase',
               }}
             >
-              zChat
+              ZENYTH
             </span>
+            <span style={{ color: 'rgba(255, 255, 255, 0.25)', fontSize: '10px' }}>✦</span>
             <span
               style={{
-                fontSize: '10px',
-                background: 'rgba(0, 240, 255, 0.15)',
-                color: 'var(--accent-cyan)',
-                padding: '1px 5px',
-                borderRadius: '4px',
-                border: '1px solid rgba(0, 240, 255, 0.3)',
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--font-display)',
+                fontSize: '9px',
+                letterSpacing: '0.28em',
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
               }}
             >
-              {isDesktop ? 'DESKTOP' : 'HUD'}
+              DUELING GROUNDS
             </span>
           </div>
+
           {identity && (
             <div
               style={{
-                fontSize: '12px',
-                color: 'var(--text-secondary)',
+                fontSize: '11px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
+                marginTop: '1px',
               }}
             >
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{identity.displayName}</span>
-              <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+              <div
+                style={{
+                  width: '5px',
+                  height: '5px',
+                  background: 'var(--status-online)',
+                  transform: 'rotate(45deg)',
+                  boxShadow: '0 0 6px var(--status-online)',
+                }}
+              />
+              <span style={{ fontWeight: 600, color: 'var(--text-silver)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {identity.displayName}
+              </span>
+              <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '10px' }}>
                 {identity.tag}
               </span>
               {roomState.code && (
                 <span
                   style={{
-                    fontSize: '10px',
-                    background: 'rgba(157, 78, 221, 0.25)',
-                    color: 'var(--accent-purple)',
+                    fontSize: '9px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: '#ffffff',
                     padding: '1px 5px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--accent-purple)',
+                    borderRadius: '2px',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
                     fontFamily: 'var(--font-mono)',
-                    marginLeft: '4px',
+                    letterSpacing: '0.08em',
                   }}
                 >
-                  ⚡ {roomState.code}
+                  SANCTUM: {roomState.code}
                 </span>
               )}
             </div>
@@ -153,75 +161,176 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
-              padding: '6px 10px',
-              height: '34px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'rgba(0, 240, 255, 0.15)',
-              border: '1px solid var(--accent-cyan)',
-              fontSize: '11px',
-              fontWeight: 700,
+              gap: '4px',
+              padding: '4px 8px',
+              height: '32px',
+              borderRadius: '2px',
+              background: 'var(--void-2)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              fontSize: '10px',
               fontFamily: 'var(--font-mono)',
-              color: 'var(--accent-cyan)',
+              color: 'var(--text-silver)',
             }}
-            title="Real-time WebRTC UDP Latency"
+            title="Mesh Latency"
           >
-            <Wifi size={13} color="var(--accent-cyan)" />
-            <span>{roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<25ms'}</span>
+            <span>⚡ {roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<20ms'}</span>
           </div>
         )}
 
+        {/* Command Palette Trigger */}
+        <button
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            height: '32px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            color: 'var(--text-silver)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '11px',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            transition: 'border-color var(--transition-fast)',
+          }}
+          title="Open Command Palette (Ctrl+K)"
+        >
+          <IconSearchLoupe size={13} color="var(--text-silver)" />
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>CTRL+K</span>
+        </button>
+
         {/* Relay Indicator */}
         <button
-          onClick={onOpenRelays}
-          className="cyber-button"
-          style={{ padding: '6px 10px', fontSize: '12px', height: '34px' }}
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            onOpenRelays();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            height: '32px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            color: 'var(--text-silver)',
+            fontSize: '11px',
+            fontFamily: 'var(--font-mono)',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            transition: 'border-color var(--transition-fast)',
+          }}
           title="Relay Pool Status"
         >
-          <Radio size={14} color={connectedCount > 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'} />
-          <span style={{ fontFamily: 'var(--font-mono)' }}>
-            {connectedCount}/{relays.length}
-          </span>
+          <IconRelayTower size={13} color={connectedCount > 0 ? 'var(--status-relay-ok)' : 'var(--status-error)'} />
+          <span>{connectedCount}/{relays.length}</span>
         </button>
 
-        {/* Overlay HUD Toggle (Mobile/Web) */}
-        {!isDesktop && (
-          <button
-            onClick={toggleOverlay}
-            className="cyber-button"
-            style={{
-              padding: '6px 10px',
-              fontSize: '12px',
-              height: '34px',
-              borderColor: isEnabled ? 'var(--accent-cyan)' : 'var(--border-subtle)',
-              background: isEnabled ? 'rgba(0, 240, 255, 0.25)' : undefined,
-              boxShadow: isEnabled ? '0 0 12px var(--accent-cyan-glow)' : undefined,
-            }}
-            title={isEnabled ? 'Overlay Enabled (Click to toggle)' : 'Enable Chat Heads Overlay'}
-          >
-            <Layers size={14} color={isEnabled ? 'var(--accent-cyan)' : 'var(--text-secondary)'} />
-            <span>{isEnabled ? (isClickThrough ? 'GHOST' : 'HUD ON') : 'HUD'}</span>
-          </button>
-        )}
-
-        {/* Themes & Backup */}
+        {/* Overlay HUD Toggle */}
         <button
-          onClick={onOpenThemes}
-          className="cyber-button"
-          style={{ padding: '6px 8px', height: '34px' }}
-          title="HUD Visual Themes & Backup"
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            toggleOverlay();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 12px',
+            height: '32px',
+            background: isEnabled ? 'rgba(255, 255, 255, 0.18)' : 'var(--void-2)',
+            border: `1px solid ${isEnabled ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.2)'}`,
+            color: '#ffffff',
+            fontSize: '10px',
+            fontFamily: 'var(--font-display)',
+            letterSpacing: '0.15em',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            boxShadow: isEnabled ? '0 0 12px rgba(255, 255, 255, 0.2)' : 'none',
+          }}
+          title={isEnabled ? 'Overlay Active (Click to toggle)' : 'Launch Persistent Floating HUD'}
         >
-          <Palette size={15} color="var(--accent-cyan)" />
+          <IconBubbleOverlay size={13} />
+          <span>{isEnabled ? (isClickThrough ? 'GHOST' : 'HUD ON') : 'OVERLAY'}</span>
         </button>
 
-        {/* Seed Backup */}
+        {/* Audio / Mute Toggle */}
         <button
-          onClick={onOpenSeed}
-          className="cyber-button"
-          style={{ padding: '6px 8px', height: '34px' }}
-          title="Backup 12-Word Seed Phrase"
+          onClick={() => {
+            const next = !soundMuted;
+            setSoundMuted(next);
+            SoundEngine.setMuted(next);
+            if (!next) SoundEngine.playBladeTick();
+          }}
+          style={{
+            padding: '4px 8px',
+            height: '32px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            color: soundMuted ? 'var(--text-muted)' : '#ffffff',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '10px',
+            letterSpacing: '0.08em',
+          }}
+          title={soundMuted ? 'Unmute Synthesized Blade Audio' : 'Mute Synthesized Audio'}
         >
-          <KeyRound size={15} color="var(--accent-purple)" />
+          {soundMuted ? 'MUTED' : 'SFX ON'}
+        </button>
+
+        {/* Settings & Themes */}
+        <button
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            onOpenThemes();
+          }}
+          style={{
+            padding: '6px 8px',
+            height: '32px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            color: 'var(--text-silver)',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          title="Settings & Visual Themes"
+        >
+          <IconSettingsGears size={14} />
+        </button>
+
+        {/* Seed Vault */}
+        <button
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            onOpenSeed();
+          }}
+          style={{
+            padding: '6px 8px',
+            height: '32px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            color: 'var(--text-silver)',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          title="Recall Runes Vault"
+        >
+          <IconKeyVault size={14} />
         </button>
 
         {/* Desktop Frameless Window Controls */}
@@ -229,32 +338,53 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
             <button
               onClick={handleTogglePin}
-              className="cyber-button"
               style={{
-                padding: '6px 8px',
-                height: '34px',
-                background: isPinned ? 'rgba(0, 240, 255, 0.2)' : 'transparent',
-                borderColor: isPinned ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+                padding: '4px 8px',
+                height: '32px',
+                background: isPinned ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: '#ffffff',
+                cursor: 'pointer',
+                borderRadius: '2px',
+                fontSize: '10px',
+                fontFamily: 'var(--font-mono)',
               }}
               title={isPinned ? 'Always on Top (Pinned)' : 'Unpinned'}
             >
-              {isPinned ? <Pin size={14} color="var(--accent-cyan)" /> : <PinOff size={14} color="var(--text-muted)" />}
+              {isPinned ? 'PINNED' : 'PIN'}
             </button>
             <button
               onClick={handleMinimize}
-              className="cyber-button"
-              style={{ padding: '6px 8px', height: '34px', background: 'transparent' }}
+              style={{
+                padding: '4px 8px',
+                height: '32px',
+                background: 'transparent',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: 'var(--text-silver)',
+                cursor: 'pointer',
+                borderRadius: '2px',
+              }}
               title="Minimize"
             >
-              <Minus size={14} />
+              —
             </button>
             <button
               onClick={handleClose}
-              className="cyber-button"
-              style={{ padding: '6px 8px', height: '34px', background: 'transparent', color: 'var(--accent-rose)' }}
+              style={{
+                padding: '4px 8px',
+                height: '32px',
+                background: 'transparent',
+                border: '1px solid rgba(139, 52, 52, 0.4)',
+                color: 'var(--status-error)',
+                cursor: 'pointer',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
               title="Close"
             >
-              <X size={15} />
+              <IconClose size={14} />
             </button>
           </div>
         )}

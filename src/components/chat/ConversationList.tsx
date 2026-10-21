@@ -1,24 +1,23 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/core/storage/db';
-import { Contact } from '@/types';
+import { Contact, GroupChat } from '@/types';
 import { parsePubkeyInput } from '@/core/crypto/keys';
 import { useP2PStore } from '@/stores/useP2PStore';
+import { MockService } from '@/services/mockDataService';
 import { HostSquadModal } from '@/components/p2p/HostSquadModal';
 import { JoinSquadModal } from '@/components/p2p/JoinSquadModal';
+import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { BladeInput } from '@/components/design-system/BladeInput';
+import { TrackedBadge } from '@/components/design-system/TrackedBadge';
 import {
-  UserPlus,
-  MessageSquare,
-  Search,
-  ShieldAlert,
-  Users,
-  Radio,
-  Zap,
-  ArrowRight,
-  Wifi,
-  Copy,
-  Check,
-} from 'lucide-react';
+  IconShieldLock,
+  IconSearchLoupe,
+  IconCrown,
+  IconChevron,
+  IconClose,
+} from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface ConversationListProps {
   activePubkey?: string;
@@ -31,32 +30,46 @@ interface ConversationListProps {
 
 export const ConversationList: React.FC<ConversationListProps> = ({
   activePubkey,
+  activeGroupId,
   onSelectContact,
+  onSelectGroup,
   onSelectSquad,
 }) => {
   const [tab, setTab] = useState<'groups' | 'direct'>('groups');
   const { roomState } = useP2PStore();
 
+  // Load contacts from DB, seeding with MockService if empty
   const contacts = useLiveQuery(async () => {
     try {
       const list = await db.contacts.toArray();
+      if (list.length === 0) {
+        for (const c of MockService.getContacts()) {
+          await db.contacts.put(c);
+        }
+        return MockService.getContacts();
+      }
       return list.sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
     } catch {
-      return [];
+      return MockService.getContacts();
     }
-  }) ?? [];
+  }) ?? MockService.getContacts();
+
+  // Load groups from MockService
+  const [groups, setGroups] = useState<GroupChat[]>(() => MockService.getGroups());
 
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showHostSquadModal, setShowHostSquadModal] = useState(false);
   const [showJoinSquadModal, setShowJoinSquadModal] = useState(false);
-  const [copiedActiveCode, setCopiedActiveCode] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
   // Add Contact Form State
   const [newKeyInput, setNewKeyInput] = useState('');
   const [newAliasInput, setNewAliasInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
   const [searchQuery, setSearchQuery] = useState('');
+
+  // New Group Form State
+  const [newGroupName, setNewGroupName] = useState('');
 
   const filteredContacts = contacts.filter((c) =>
     c.alias.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -72,7 +85,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       return;
     }
 
-    const alias = newAliasInput.trim() || `Gamer#${hexPubkey.slice(0, 4)}`;
+    const alias = newAliasInput.trim() || `Viper#${hexPubkey.slice(0, 4)}`;
     const newContact: Contact = {
       pubkey: hexPubkey,
       npub: '',
@@ -84,320 +97,478 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     };
 
     await db.contacts.put(newContact);
+    SoundEngine.playSealChime();
     setShowAddContactModal(false);
     setNewKeyInput('');
     setNewAliasInput('');
     onSelectContact(hexPubkey);
   };
 
-  const copyActiveSquadCode = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!roomState.code) return;
-    navigator.clipboard.writeText(roomState.code);
-    setCopiedActiveCode(true);
-    setTimeout(() => setCopiedActiveCode(false), 2000);
+  const handleCreateGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+    const newG = MockService.createGroup(newGroupName.trim(), contacts.slice(0, 3).map((c) => c.pubkey));
+    setGroups(MockService.getGroups());
+    SoundEngine.playSealChime();
+    setShowCreateGroupModal(false);
+    setNewGroupName('');
+    onSelectGroup(newG.id);
   };
 
-  const peerCount = Object.keys(roomState.peers).length;
+  const formatTimestamp = (ts?: number) => {
+    if (!ts) return '';
+    const now = Date.now();
+    const diffMins = Math.floor((now - ts) / (1000 * 60));
+    if (diffMins < 1) return 'NOW';
+    if (diffMins < 60) return `${diffMins}M`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}H`;
+    return `${Math.floor(diffHours / 24)}D`;
+  };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Tab Switcher: Squads vs Direct */}
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+        background: 'var(--void-0)',
+      }}
+    >
+      {/* Category Blade Tabs */}
       <div style={{ display: 'flex', padding: '6px 12px 2px', gap: '8px' }}>
         <button
-          onClick={() => setTab('groups')}
-          className="cyber-button"
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            setTab('groups');
+          }}
           style={{
             flex: 1,
-            padding: '8px',
-            fontSize: '13px',
-            background: tab === 'groups' ? 'rgba(157, 78, 221, 0.25)' : 'transparent',
-            borderColor: tab === 'groups' ? 'var(--accent-purple)' : 'var(--border-subtle)',
+            padding: '10px 14px',
+            fontFamily: 'var(--font-display)',
+            fontSize: '11px',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: tab === 'groups' ? 'var(--void-2)' : 'transparent',
+            border: tab === 'groups' ? '1px solid rgba(255, 255, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+            color: tab === 'groups' ? '#ffffff' : 'var(--text-muted)',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            transition: 'all var(--transition-fast)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
           }}
         >
-          <Radio size={14} color={tab === 'groups' ? 'var(--accent-purple)' : 'var(--text-muted)'} />
-          <span>Party Squads (P2P)</span>
+          <span style={{ fontSize: '9px', opacity: tab === 'groups' ? 1 : 0.4 }}>◆</span>
+          <span>ACTIVE SANCTUMS</span>
         </button>
 
         <button
-          onClick={() => setTab('direct')}
-          className="cyber-button"
+          onClick={() => {
+            SoundEngine.playBladeTick();
+            setTab('direct');
+          }}
           style={{
             flex: 1,
-            padding: '8px',
-            fontSize: '13px',
-            background: tab === 'direct' ? 'rgba(0, 240, 255, 0.2)' : 'transparent',
-            borderColor: tab === 'direct' ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+            padding: '10px 14px',
+            fontFamily: 'var(--font-display)',
+            fontSize: '11px',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: tab === 'direct' ? 'var(--void-2)' : 'transparent',
+            border: tab === 'direct' ? '1px solid rgba(255, 255, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+            color: tab === 'direct' ? '#ffffff' : 'var(--text-muted)',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            transition: 'all var(--transition-fast)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
           }}
         >
-          <MessageSquare size={14} color={tab === 'direct' ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
-          <span>Direct (1:1)</span>
+          <span style={{ fontSize: '9px', opacity: tab === 'direct' ? 1 : 0.4 }}>◆</span>
+          <span>WHISPER CHANNELS</span>
         </button>
       </div>
 
-      {/* Main Content Area */}
+      {/* TAB 1: SANCTUMS / GROUPS */}
       {tab === 'groups' ? (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Quick Squad Action Bar */}
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => setShowHostSquadModal(true)}
-              className="cyber-button"
-              style={{
-                flex: 1,
-                padding: '12px',
-                fontSize: '14px',
-                background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.3), rgba(0, 240, 255, 0.2))',
-                borderColor: 'var(--accent-purple)',
-              }}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Quick Tactical Action Blades */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <ChromeButton
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreateGroupModal(true)}
+              icon={<IconCrown size={13} />}
+              style={{ width: '100%', justifyContent: 'center' }}
             >
-              <Zap size={16} color="var(--accent-purple)" />
-              <span>Host Squad</span>
-            </button>
-
-            <button
-              onClick={() => setShowJoinSquadModal(true)}
-              className="cyber-button"
-              style={{
-                flex: 1,
-                padding: '12px',
-                fontSize: '14px',
-                background: 'transparent',
-                borderColor: 'var(--accent-cyan)',
-              }}
-            >
-              <Users size={16} color="var(--accent-cyan)" />
-              <span>Join with Code</span>
-            </button>
+              + FORM NEW SANCTUM
+            </ChromeButton>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <ChromeButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowHostSquadModal(true)}
+                style={{ flex: 1, border: '1px solid rgba(255, 255, 255, 0.15)', fontSize: '10px' }}
+              >
+                HOST P2P
+              </ChromeButton>
+              <ChromeButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowJoinSquadModal(true)}
+                style={{ flex: 1, border: '1px solid rgba(255, 255, 255, 0.15)', fontSize: '10px' }}
+              >
+                JOIN CODE
+              </ChromeButton>
+            </div>
           </div>
 
-          {/* Active Live Squad Card (if connected) */}
-          {roomState.code ? (
+          {/* Active Live P2P Squad if connected */}
+          {roomState.code && (
             <div
-              onClick={() => onSelectSquad(roomState.code)}
-              className="glass-panel-glow"
+              onClick={() => onSelectSquad(roomState.code!)}
               style={{
-                padding: '16px',
+                position: 'relative',
+                padding: '14px 16px',
+                background: 'var(--void-2)',
+                border: '1px solid rgba(255, 255, 255, 0.35)',
+                clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
                 cursor: 'pointer',
-                borderColor: 'var(--accent-purple)',
-                background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.15), rgba(8, 10, 15, 0.9))',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-emerald)', boxShadow: '0 0 8px var(--accent-emerald)' }} />
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-emerald)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Active Squad Connected
-                  </span>
-                </div>
+              {/* Unread / Active Light Sliver on Left Edge */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: '15%',
+                  bottom: '15%',
+                  width: '2px',
+                  background: '#ffffff',
+                  boxShadow: '0 0 8px rgba(255, 255, 255, 0.85)',
+                }}
+              />
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
-                  <Wifi size={13} />
-                  <span>{roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<25ms'}</span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <TrackedBadge label="DIRECT UDP MESH" variant="chrome" />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--status-online)' }}>
+                  ⚡ {roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<20ms'}
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h4 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '0.5px', color: 'var(--text-primary)' }}>
-                    {roomState.code}
+                  <h4 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', letterSpacing: '0.15em', color: '#ffffff', margin: 0 }}>
+                    SANCTUM: {roomState.code}
                   </h4>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {peerCount + 1} players in squad • Direct UDP Mesh
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                    {Object.keys(roomState.peers).length + 1} Warriors in Mesh
                   </p>
                 </div>
-
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    onClick={copyActiveSquadCode}
-                    className="cyber-button"
-                    style={{ padding: '6px 10px', fontSize: '11px', background: 'rgba(157, 78, 221, 0.2)' }}
-                    title="Copy Squad Code"
-                  >
-                    {copiedActiveCode ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
-                    <span>{copiedActiveCode ? 'COPIED' : 'CODE'}</span>
-                  </button>
-
-                  <button
-                    className="cyber-button"
-                    style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--accent-purple)' }}
-                  >
-                    <span>Enter HUD</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div
-              className="glass-panel"
-              style={{
-                padding: '24px 16px',
-                textAlign: 'center',
-                borderColor: 'var(--border-subtle)',
-              }}
-            >
-              <Radio size={36} color="var(--accent-purple)" style={{ margin: '0 auto 12px', opacity: 0.6 }} />
-              <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>
-                Ultra-Fast P2P Gaming Squads
-              </h4>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5', maxWidth: '320px', margin: '0 auto 16px' }}>
-                Connect players from Mumbai, Delhi, Bangalore, or anywhere in India directly with <strong>15–35ms ping</strong> over WebRTC UDP. Zero server lag, zero 64-char crypto keys.
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                <button
-                  onClick={() => setShowHostSquadModal(true)}
-                  className="cyber-button"
-                  style={{ padding: '8px 16px', fontSize: '13px' }}
-                >
-                  Create 6-Digit Party Code
-                </button>
+                <IconChevron size={14} direction="right" color="var(--text-silver)" />
               </div>
             </div>
           )}
 
-          {/* Connected Squad Teammates from recent sessions */}
-          {contacts.length > 0 && (
-            <div style={{ marginTop: '8px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', paddingLeft: '4px' }}>
-                Teammates Met in Squads ({contacts.length})
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {contacts.map((c) => (
-                  <div
-                    key={c.pubkey}
-                    onClick={() => onSelectContact(c.pubkey)}
-                    className="glass-panel"
-                    style={{
-                      padding: '10px 12px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div
+          {/* Pinned Sanctums List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="tracked-micro" style={{ paddingLeft: '4px', margin: '4px 0 2px' }}>
+              PINNED SANCTUMS ({groups.length})
+            </div>
+
+            {groups.map((group) => {
+              const isSelected = group.id === activeGroupId;
+              const hasUnread = (group.unreadCount || 0) > 0;
+
+              return (
+                <div
+                  key={group.id}
+                  onClick={() => {
+                    SoundEngine.playBladeTick();
+                    onSelectGroup(group.id);
+                  }}
+                  style={{
+                    position: 'relative',
+                    padding: '14px 16px',
+                    background: isSelected ? 'var(--void-3)' : 'var(--void-1)',
+                    border: isSelected
+                      ? '1px solid rgba(255, 255, 255, 0.45)'
+                      : '1px solid rgba(255, 255, 255, 0.1)',
+                    clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)',
+                  }}
+                >
+                  {/* Unread Indicator: Razor-Thin Specular White Light Sliver on Left Edge */}
+                  {hasUnread && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: '12%',
+                        bottom: '12%',
+                        width: '2px',
+                        background: '#ffffff',
+                        boxShadow: '0 0 10px rgba(255, 255, 255, 0.95)',
+                      }}
+                    />
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '8px' }}>◆</span>
+                      <span
                         style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: 'rgba(0, 240, 255, 0.15)',
-                          border: '1px solid var(--accent-cyan)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
+                          fontFamily: 'var(--font-display)',
                           fontSize: '13px',
-                          color: 'var(--accent-cyan)',
+                          letterSpacing: '0.12em',
+                          fontWeight: 700,
+                          color: isSelected ? '#ffffff' : 'var(--text-silver)',
+                          textTransform: 'uppercase',
                         }}
                       >
-                        {c.alias.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{c.alias}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{c.tag}</div>
-                      </div>
+                        {group.name}
+                      </span>
                     </div>
 
-                    <button
-                      className="cyber-button"
-                      style={{ padding: '4px 8px', fontSize: '11px', background: 'transparent' }}
-                    >
-                      <MessageSquare size={12} />
-                      <span>1:1 Chat</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                        {formatTimestamp(group.lastTimestamp)}
+                      </span>
+                      {hasUnread && (
+                        <span
+                          style={{
+                            padding: '1px 5px',
+                            background: '#ffffff',
+                            color: '#000000',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            borderRadius: '1px',
+                          }}
+                        >
+                          {group.unreadCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '280px',
+                      }}
+                    >
+                      {group.lastMessage || 'Sanctum sealed with symmetric key.'}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '9px',
+                          color: 'var(--status-encrypted)',
+                          letterSpacing: '0.05em',
+                        }}
+                      >
+                        EPOCH {group.currentEpoch}
+                      </span>
+                      <IconCrown size={12} color="var(--text-muted)" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
-        /* Direct 1:1 Tab */
+        /* TAB 2: DIRECT WHISPER CHANNELS */
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Search & Add Bar */}
-          <div style={{ padding: '8px 12px', display: 'flex', gap: '8px' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <Search size={14} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '12px' }} />
-              <input
-                type="text"
-                className="cyber-input"
-                placeholder="Search teammates..."
+          {/* Search & Add Blade Bar */}
+          <div style={{ padding: '8px 12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ flex: 1 }}>
+              <BladeInput
+                placeholder="Search by alias or tag (#8f3a)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', paddingLeft: '32px' }}
+                leftIcon={<IconSearchLoupe size={15} />}
+                style={{ height: '38px', fontSize: '13px' }}
               />
             </div>
-            <button
-              onClick={() => setShowAddContactModal(true)}
-              className="cyber-button"
-              style={{ padding: '8px 12px' }}
-              title="Add Contact"
+            <ChromeButton
+              variant="solid"
+              size="sm"
+              onClick={() => {
+                SoundEngine.playBladeTick();
+                setShowAddContactModal(true);
+              }}
+              style={{ minHeight: '38px', padding: '0 14px' }}
             >
-              <UserPlus size={16} />
-            </button>
+              + FORGE
+            </ChromeButton>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px' }}>
+          {/* Contact List */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {filteredContacts.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)' }}>
-                <MessageSquare size={36} style={{ marginBottom: '12px', opacity: 0.4 }} />
-                <p style={{ fontSize: '14px', marginBottom: '8px' }}>No direct conversations.</p>
-                <p style={{ fontSize: '12px' }}>Join a squad party or add a friend to start chatting.</p>
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '48px 16px',
+                  background: 'var(--void-1)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  margin: '12px 0',
+                  clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                }}
+              >
+                <IconShieldLock size={32} color="var(--text-muted)" style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                <div className="font-display" style={{ fontSize: '13px', letterSpacing: '0.2em', color: '#ffffff', marginBottom: '4px' }}>
+                  NO ACTIVE WHISPERS
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '280px', margin: '0 auto' }}>
+                  No channels found in this sector. Forge a new whisper with a peer public key.
+                </p>
               </div>
             ) : (
               filteredContacts.map((contact) => {
                 const isSelected = contact.pubkey === activePubkey;
+                const hasUnread = (contact.unreadCount || 0) > 0;
+
                 return (
                   <div
                     key={contact.pubkey}
-                    onClick={() => onSelectContact(contact.pubkey)}
-                    className={isSelected ? 'glass-panel-glow' : 'glass-panel'}
+                    onClick={() => {
+                      SoundEngine.playBladeTick();
+                      onSelectContact(contact.pubkey);
+                    }}
                     style={{
-                      padding: '12px',
-                      marginBottom: '8px',
+                      position: 'relative',
+                      padding: '12px 14px',
+                      background: isSelected ? 'var(--void-3)' : 'var(--void-1)',
+                      border: isSelected
+                        ? '1px solid rgba(255, 255, 255, 0.45)'
+                        : '1px solid rgba(255, 255, 255, 0.1)',
+                      clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-subtle)',
                       transition: 'all var(--transition-fast)',
                     }}
                   >
+                    {/* Unread Indicator: Razor-Thin Specular White Light Sliver on Left Edge */}
+                    {hasUnread && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: '15%',
+                          bottom: '15%',
+                          width: '2px',
+                          background: '#ffffff',
+                          boxShadow: '0 0 8px rgba(255, 255, 255, 0.95)',
+                        }}
+                      />
+                    )}
+
+                    {/* Sharp Faceted Avatar Sigil */}
                     <div
                       style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(157, 78, 221, 0.2))',
-                        border: '1px solid var(--border-glow)',
+                        width: '36px',
+                        height: '36px',
+                        background: 'var(--void-2)',
+                        border: '1px solid rgba(255, 255, 255, 0.25)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 700,
-                        color: 'var(--accent-cyan)',
-                        fontSize: '16px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontFamily: 'var(--font-display)',
+                        letterSpacing: '0.05em',
+                        clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                        flexShrink: 0,
                       }}
                     >
                       {contact.alias.slice(0, 2).toUpperCase()}
                     </div>
+
+                    {/* Contact Details */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {contact.alias}
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
-                          {contact.tag}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-display)',
+                              fontWeight: 700,
+                              fontSize: '13px',
+                              letterSpacing: '0.1em',
+                              color: isSelected ? '#ffffff' : 'var(--text-silver)',
+                              textTransform: 'uppercase',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {contact.alias}
+                          </span>
+                          {/* Handle format: name#a3f9 */}
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                            {contact.tag}
+                          </span>
+                        </div>
+
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                          {formatTimestamp(contact.lastTimestamp)}
                         </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {contact.lastMessage || 'End-to-end encrypted'}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-muted)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '240px',
+                          }}
+                        >
+                          {contact.lastMessage || 'End-to-end encrypted whisper.'}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <IconShieldLock size={11} color="var(--status-encrypted)" />
+                          {hasUnread && (
+                            <span
+                              style={{
+                                padding: '1px 5px',
+                                background: '#ffffff',
+                                color: '#000000',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '9px',
+                                fontWeight: 700,
+                                borderRadius: '1px',
+                              }}
+                            >
+                              {contact.unreadCount}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -405,6 +576,129 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               })
             )}
           </div>
+        </div>
+      )}
+
+      {/* Form Sanctum Modal */}
+      {showCreateGroupModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
+          <form
+            onSubmit={handleCreateGroup}
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              background: 'var(--void-1)',
+              border: '1px solid rgba(255, 255, 255, 0.22)',
+              padding: '24px',
+              clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="tracked-micro">NEW COVENANT</span>
+              <button
+                type="button"
+                onClick={() => setShowCreateGroupModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <IconClose size={14} />
+              </button>
+            </div>
+
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', letterSpacing: '0.18em', color: '#ffffff', textTransform: 'uppercase', margin: 0 }}>
+              FORM SANCTUM
+            </h3>
+
+            <BladeInput
+              label="SANCTUM NAME"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="e.g. SQUAD ALPHA, RAID PARTY"
+              autoFocus
+              required
+            />
+
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              A symmetric Epoch I key will be generated and distributed to members with forward secrecy.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <ChromeButton variant="ghost" size="sm" type="button" onClick={() => setShowCreateGroupModal(false)}>
+                CANCEL
+              </ChromeButton>
+              <ChromeButton variant="solid" size="sm" type="submit">
+                SEAL SANCTUM
+              </ChromeButton>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Add Teammate / Forge Whisper Modal */}
+      {showAddContactModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
+          <form
+            onSubmit={handleAddContact}
+            style={{
+              width: '100%',
+              maxWidth: '440px',
+              background: 'var(--void-1)',
+              border: '1px solid rgba(255, 255, 255, 0.22)',
+              padding: '24px',
+              clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="tracked-micro">FORGE WHISPER</span>
+              <button
+                type="button"
+                onClick={() => setShowAddContactModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <IconClose size={14} />
+              </button>
+            </div>
+
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', letterSpacing: '0.18em', color: '#ffffff', textTransform: 'uppercase', margin: 0 }}>
+              ADD PEER BY PUBKEY
+            </h3>
+
+            <BladeInput
+              label="PEER PUBLIC KEY (64-CHAR HEX OR NPUB1...)"
+              value={newKeyInput}
+              onChange={(e) => setNewKeyInput(e.target.value)}
+              placeholder="npub1... or hex key"
+              required
+              autoFocus
+            />
+
+            <BladeInput
+              label="WARRIOR ALIAS"
+              value={newAliasInput}
+              onChange={(e) => setNewAliasInput(e.target.value)}
+              placeholder="e.g. Viper"
+            />
+
+            {errorMsg && (
+              <div style={{ color: 'var(--status-error)', fontSize: '11px' }}>
+                ✕ {errorMsg}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <ChromeButton variant="ghost" size="sm" type="button" onClick={() => setShowAddContactModal(false)}>
+                CANCEL
+              </ChromeButton>
+              <ChromeButton variant="solid" size="sm" type="submit">
+                ENGAGE WHISPER
+              </ChromeButton>
+            </div>
+          </form>
         </div>
       )}
 
@@ -426,66 +720,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             onSelectSquad(code);
           }}
         />
-      )}
-
-      {/* Add Teammate by Pubkey Modal (Advanced Fallback) */}
-      {showAddContactModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
-          <div className="glass-panel-glow" style={{ width: '100%', maxWidth: '420px', padding: '20px' }}>
-            <h3 style={{ fontSize: '18px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <UserPlus size={18} color="var(--accent-cyan)" />
-              Add Teammate
-            </h3>
-            <form onSubmit={handleAddContact} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                  Public Key (Hex or npub1...)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="npub1... or 64-char hex pubkey"
-                  className="cyber-input"
-                  style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: '12px' }}
-                  value={newKeyInput}
-                  onChange={(e) => setNewKeyInput(e.target.value)}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                  Nickname / Gamer Tag
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Shadow"
-                  className="cyber-input"
-                  style={{ width: '100%' }}
-                  value={newAliasInput}
-                  onChange={(e) => setNewAliasInput(e.target.value)}
-                />
-              </div>
-              {errorMsg && (
-                <div style={{ color: 'var(--accent-rose)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <ShieldAlert size={14} />
-                  {errorMsg}
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-                <button
-                  type="button"
-                  className="cyber-button"
-                  style={{ background: 'transparent' }}
-                  onClick={() => setShowAddContactModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="cyber-button">
-                  Start Chat
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );

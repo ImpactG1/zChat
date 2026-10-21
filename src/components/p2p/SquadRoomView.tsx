@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useP2PStore } from '@/stores/useP2PStore';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { ArrowLeft, Send, Users, Wifi, Copy, Check, LogOut, Radio } from 'lucide-react';
+import { MessageBubble } from '@/components/design-system/MessageBubble';
+import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { BladeInput } from '@/components/design-system/BladeInput';
+import {
+  IconBladeSend,
+  IconChevron,
+  IconCopyBlade,
+} from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface SquadRoomViewProps {
   onBack: () => void;
@@ -17,7 +25,6 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
   const peersList = Object.values(roomState.peers);
   const connectedPeers = peersList.filter((p) => p.connectionState === 'connected');
 
-  // Auto-scroll when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -27,73 +34,108 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
     if (!inputText.trim()) return;
     const text = inputText;
     setInputText('');
+    SoundEngine.playBladeTick();
     await sendMessage(text);
   };
 
   const copyCode = () => {
     navigator.clipboard.writeText(roomState.code);
+    SoundEngine.playBladeTick();
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const handleLeave = () => {
+    SoundEngine.playBladeTick();
     leaveSquad();
     onBack();
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+        background: 'var(--void-0)',
+      }}
+    >
       {/* Top HUD Squad Header */}
       <div
-        className="glass-panel-glow"
         style={{
           margin: '0 12px 6px',
           padding: '10px 14px',
+          background: 'var(--void-1)',
+          border: '1px solid rgba(255, 255, 255, 0.16)',
+          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderColor: 'var(--accent-purple)',
+          zIndex: 20,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={onBack}
-            className="cyber-button"
-            style={{ padding: '6px', background: 'transparent', borderColor: 'transparent' }}
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onBack();
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-silver)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px',
+            }}
           >
-            <ArrowLeft size={18} />
+            <IconChevron size={16} direction="left" />
           </button>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: 700, fontSize: '16px', letterSpacing: '0.5px', color: 'var(--text-primary)' }}>
-                {roomState.code}
+              <span
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 800,
+                  fontSize: '15px',
+                  letterSpacing: '0.15em',
+                  color: '#ffffff',
+                }}
+              >
+                SANCTUM: {roomState.code}
               </span>
 
               <button
                 onClick={copyCode}
-                className="cyber-button"
                 style={{
-                  padding: '3px 8px',
-                  fontSize: '11px',
-                  background: 'rgba(157, 78, 221, 0.25)',
-                  borderColor: 'var(--accent-purple)',
+                  padding: '2px 8px',
+                  fontSize: '10px',
+                  fontFamily: 'var(--font-mono)',
+                  background: 'var(--void-2)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: copiedCode ? '#ffffff' : 'var(--text-silver)',
+                  cursor: 'pointer',
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
-                title="Copy Squad Code for Teammates"
+                title="Copy Squad Code"
               >
-                {copiedCode ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
-                <span>{copiedCode ? 'COPIED' : 'INVITE CODE'}</span>
+                <IconCopyBlade size={10} />
+                <span>{copiedCode ? 'COPIED' : 'CODE'}</span>
               </button>
             </div>
 
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-emerald)' }}>
-                <Radio size={12} />
-                Direct WebRTC UDP Mesh
-              </span>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1px' }}>
+              <span style={{ color: 'var(--status-relay-ok)' }}>◆ Direct UDP Mesh</span>
               <span>•</span>
-              <span style={{ color: 'var(--text-secondary)' }}>
-                {connectedPeers.length + 1} in Party
+              <span style={{ color: 'var(--text-silver)' }}>
+                {connectedPeers.length + 1} Warriors in Mesh
               </span>
             </div>
           </div>
@@ -105,28 +147,35 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'rgba(0, 240, 255, 0.1)',
-              border: '1px solid var(--accent-cyan)',
-              fontSize: '12px',
-              fontWeight: 700,
+              gap: '4px',
+              padding: '4px 8px',
+              borderRadius: '2px',
+              background: 'var(--void-2)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              fontSize: '11px',
               fontFamily: 'var(--font-mono)',
-              color: 'var(--accent-cyan)',
+              color: 'var(--status-online)',
             }}
           >
-            <Wifi size={13} />
-            <span>{roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<25ms'}</span>
+            <span>⚡ {roomState.averagePing > 0 ? `${roomState.averagePing}ms` : '<20ms'}</span>
           </div>
 
           <button
             onClick={handleLeave}
-            className="cyber-button"
-            style={{ padding: '6px 10px', background: 'rgba(244, 63, 94, 0.2)', borderColor: 'var(--accent-rose)' }}
-            title="Leave Squad"
+            style={{
+              padding: '6px 10px',
+              background: 'rgba(139, 52, 52, 0.2)',
+              border: '1px solid rgba(139, 52, 52, 0.5)',
+              color: 'var(--status-error)',
+              fontSize: '11px',
+              fontFamily: 'var(--font-display)',
+              letterSpacing: '0.12em',
+              cursor: 'pointer',
+              borderRadius: '2px',
+            }}
+            title="Leave Sanctum"
           >
-            <LogOut size={14} color="var(--accent-rose)" />
+            DISCONNECT
           </button>
         </div>
       </div>
@@ -140,26 +189,24 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
           overflowX: 'auto',
         }}
       >
-        {/* Self Badge */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '4px 8px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--bg-tertiary)',
-            border: '1px solid var(--border-glow)',
+            padding: '4px 10px',
+            borderRadius: '2px',
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
             fontSize: '11px',
             whiteSpace: 'nowrap',
           }}
         >
-          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-cyan)' }} />
-          <span style={{ fontWeight: 600 }}>{identity?.displayName || 'You'}</span>
+          <div style={{ width: '4px', height: '4px', background: '#ffffff', transform: 'rotate(45deg)' }} />
+          <span style={{ fontWeight: 600, color: '#ffffff' }}>{identity?.displayName || 'You'}</span>
           <span style={{ color: 'var(--text-muted)' }}>(Host)</span>
         </div>
 
-        {/* Peer Badges with Live Ping */}
         {peersList.map((peer) => {
           const isConnected = peer.connectionState === 'connected';
           return (
@@ -169,98 +216,81 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '4px 8px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-tertiary)',
-                border: `1px solid ${isConnected ? 'var(--accent-emerald)' : 'var(--border-subtle)'}`,
+                padding: '4px 10px',
+                borderRadius: '2px',
+                background: 'var(--void-2)',
+                border: `1px solid ${isConnected ? 'rgba(82, 128, 104, 0.45)' : 'rgba(255, 255, 255, 0.1)'}`,
                 fontSize: '11px',
                 whiteSpace: 'nowrap',
               }}
             >
               <div
                 style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: isConnected ? 'var(--accent-emerald)' : 'var(--accent-amber)',
+                  width: '4px',
+                  height: '4px',
+                  background: isConnected ? 'var(--status-relay-ok)' : 'var(--status-warning)',
+                  transform: 'rotate(45deg)',
                 }}
               />
-              <span style={{ fontWeight: 600 }}>{peer.gamerTag}</span>
-              <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ fontWeight: 600, color: '#ffffff' }}>{peer.gamerTag}</span>
+              <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                 {isConnected ? `${peer.pingMs || 18}ms` : 'syncing'}
               </span>
             </div>
           );
         })}
-
-        {peersList.length === 0 && (
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0' }}>
-            <span>Waiting for teammates to join with code</span>
-            <span style={{ fontWeight: 700, color: 'var(--accent-purple)' }}>{roomState.code}</span>
-          </div>
-        )}
       </div>
 
-      {/* Messages Stream */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* Message List */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '8px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+        }}
+      >
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', margin: 'auto', color: 'var(--text-muted)', fontSize: '13px', maxWidth: '300px' }}>
-            <Users size={32} style={{ margin: '0 auto 8px', opacity: 0.4, color: 'var(--accent-purple)' }} />
-            <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Squad Party Connected</p>
-            <p style={{ fontSize: '11px', marginTop: '4px' }}>
-              Send game callouts, tactical coordinates, or chat. Messages travel directly via encrypted UDP.
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '48px 16px',
+              margin: 'auto',
+              background: 'var(--void-1)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '2px',
+              maxWidth: '340px',
+            }}
+          >
+            <div className="font-display" style={{ fontSize: '13px', letterSpacing: '0.2em', color: '#ffffff', marginBottom: '4px' }}>
+              SANCTUM CHANNEL ACTIVE
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+              Direct WebRTC peer mesh open. Transmit orders below.
             </p>
           </div>
         ) : (
           messages.map((msg) => {
-            const isMe = msg.senderId === identity?.pubkey.slice(0, 16) || msg.senderPubkey === identity?.pubkey;
+            const isMe = msg.senderId === 'self';
             return (
-              <div
+              <MessageBubble
                 key={msg.id}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: isMe ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%',
-                  alignSelf: isMe ? 'flex-end' : 'flex-start',
-                }}
-              >
-                {!isMe && (
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-purple)', marginBottom: '2px', paddingLeft: '4px' }}>
-                    {msg.senderTag}
-                  </span>
-                )}
-
-                <div
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    background: isMe
-                      ? 'linear-gradient(135deg, rgba(157, 78, 221, 0.35), rgba(0, 240, 255, 0.25))'
-                      : 'var(--bg-card)',
-                    border: isMe ? '1px solid var(--accent-purple)' : '1px solid var(--border-subtle)',
-                    color: 'var(--text-primary)',
-                    fontSize: '14px',
-                    lineHeight: '1.4',
-                    wordBreak: 'break-word',
-                    backdropFilter: 'blur(8px)',
-                    boxShadow: isMe ? '0 0 12px rgba(157, 78, 221, 0.15)' : undefined,
-                  }}
-                >
-                  {msg.content}
-                </div>
-
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', padding: '0 4px' }}>
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
+                id={msg.id}
+                content={msg.content}
+                timestamp={msg.timestamp}
+                isSelf={isMe}
+                senderName={isMe ? undefined : msg.senderTag}
+                status="delivered"
+              />
             );
           })
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Squad Chat Input */}
+      {/* Message Input Bar */}
       <form
         onSubmit={handleSend}
         style={{
@@ -268,29 +298,29 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
           display: 'flex',
           gap: '8px',
           alignItems: 'center',
+          background: 'var(--void-0)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
         }}
       >
-        <input
-          type="text"
-          className="cyber-input"
-          placeholder={`Callout to ${roomState.code}...`}
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          style={{ flex: 1 }}
-          autoFocus
-        />
-        <button
+        <div style={{ flex: 1 }}>
+          <BladeInput
+            placeholder={`Transmit to Sanctum ${roomState.code}...`}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            style={{ height: '42px' }}
+          />
+        </div>
+
+        <ChromeButton
+          variant="solid"
+          size="md"
           type="submit"
           disabled={!inputText.trim()}
-          className="cyber-button"
-          style={{
-            padding: '10px 16px',
-            background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))',
-            opacity: !inputText.trim() ? 0.5 : 1,
-          }}
+          icon={<IconBladeSend size={15} color="#000" />}
+          style={{ height: '42px', minHeight: '42px', padding: '0 16px' }}
         >
-          <Send size={16} />
-        </button>
+          SEAL
+        </ChromeButton>
       </form>
     </div>
   );

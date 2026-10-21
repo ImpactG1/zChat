@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { KeyRound, Copy, Check, X, AlertTriangle, LogOut } from 'lucide-react';
+import { KeyFingerprintVisualizer } from '@/components/design-system/KeyFingerprintVisualizer';
+import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { BladeDivider } from '@/components/design-system/BladeDivider';
+import {
+  IconShieldLock,
+  IconCopyBlade,
+  IconClose,
+  IconTrashFlame,
+} from '@/components/icons/RazorIcons';
+import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface SeedBackupModalProps {
   onClose: () => void;
@@ -9,7 +18,7 @@ interface SeedBackupModalProps {
 export const SeedBackupModal: React.FC<SeedBackupModalProps> = ({ onClose }) => {
   const { identity, logout } = useAuthStore();
   const [copiedSeed, setCopiedSeed] = useState(false);
-  const [copiedPubkey, setCopiedPubkey] = useState(false);
+  const [copiedNpub, setCopiedNpub] = useState(false);
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
 
   if (!identity) return null;
@@ -19,150 +28,230 @@ export const SeedBackupModal: React.FC<SeedBackupModalProps> = ({ onClose }) => 
   const copySeed = () => {
     if (!identity.mnemonic) return;
     navigator.clipboard.writeText(identity.mnemonic);
+    SoundEngine.playBladeTick();
     setCopiedSeed(true);
     setTimeout(() => setCopiedSeed(false), 2000);
   };
 
-  const copyPubkey = () => {
+  const copyNpub = () => {
     navigator.clipboard.writeText(identity.npub);
-    setCopiedPubkey(true);
-    setTimeout(() => setCopiedPubkey(false), 2000);
+    SoundEngine.playBladeTick();
+    setCopiedNpub(true);
+    setTimeout(() => setCopiedNpub(false), 2000);
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
-      <div className="glass-panel-glow" style={{ width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto', padding: '24px' }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        zIndex: 100,
+      }}
+    >
+      <div
+        className="anim-slice-in"
+        style={{
+          width: '100%',
+          maxWidth: '520px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          background: 'var(--void-1)',
+          border: '1px solid rgba(255, 255, 255, 0.22)',
+          clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
+          padding: '24px',
+          boxShadow: '0 12px 48px rgba(0, 0, 0, 0.95)',
+        }}
+      >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <KeyRound size={20} color="var(--accent-purple)" />
-            <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Identity & Seed Phrase</h3>
+            <IconShieldLock size={18} color="var(--status-encrypted)" />
+            <h3
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '16px',
+                letterSpacing: '0.2em',
+                color: '#ffffff',
+                textTransform: 'uppercase',
+                margin: 0,
+              }}
+            >
+              IDENTITY & VAULT
+            </h3>
           </div>
           <button
-            onClick={onClose}
-            className="cyber-button"
-            style={{ padding: '6px', background: 'transparent', borderColor: 'transparent' }}
+            onClick={() => {
+              SoundEngine.playBladeTick();
+              onClose();
+            }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
           >
-            <X size={18} />
+            <IconClose size={16} />
           </button>
         </div>
 
-        {/* Public Identity */}
-        <div className="glass-panel" style={{ padding: '12px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Your Shareable ID (npub)</div>
+        {/* Visualized Cryptographic Fingerprint */}
+        <div style={{ marginBottom: '20px' }}>
+          <KeyFingerprintVisualizer pubkey={identity.pubkey} tag={identity.tag} />
+        </div>
+
+        {/* Public Identity npub */}
+        <div
+          style={{
+            background: 'var(--void-2)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            padding: '12px',
+            marginBottom: '16px',
+            borderRadius: '2px',
+          }}
+        >
+          <div className="tracked-micro" style={{ marginBottom: '6px' }}>
+            SHAREABLE WARRIOR COVENANT (NPUB)
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               type="text"
               readOnly
               value={identity.npub}
-              className="cyber-input"
-              style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 10px' }}
+              style={{
+                flex: 1,
+                background: 'var(--void-0)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: 'var(--text-silver)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                padding: '6px 10px',
+                outline: 'none',
+              }}
             />
-            <button onClick={copyPubkey} className="cyber-button" style={{ padding: '6px 10px', fontSize: '12px' }}>
-              {copiedPubkey ? <Check size={14} color="var(--accent-emerald)" /> : <Copy size={14} />}
-            </button>
-          </div>
-        </div>
-
-        {/* 12-Word Seed Grid */}
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>12-Word Recovery Seed</span>
             <button
-              onClick={copySeed}
-              className="cyber-button"
-              style={{ padding: '4px 10px', fontSize: '11px' }}
+              onClick={copyNpub}
+              style={{
+                background: 'var(--void-3)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: '#ffffff',
+                padding: '6px 10px',
+                fontFamily: 'var(--font-display)',
+                fontSize: '10px',
+                letterSpacing: '0.12em',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
             >
-              {copiedSeed ? <Check size={13} color="var(--accent-emerald)" /> : <Copy size={13} />}
-              {copiedSeed ? 'Copied' : 'Copy All'}
+              <IconCopyBlade size={11} />
+              <span>{copiedNpub ? 'COPIED' : 'COPY'}</span>
             </button>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '8px',
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            {words.map((word, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '12px',
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-primary)',
-                  padding: '4px 6px',
-                  background: 'rgba(255,255,255,0.03)',
-                  borderRadius: '4px',
-                }}
-              >
-                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{idx + 1}.</span>
-                <span style={{ fontWeight: 600 }}>{word}</span>
-              </div>
-            ))}
           </div>
         </div>
 
-        {/* Warning alert */}
+        <BladeDivider label="12 RUNES OF RECALL" />
+
+        {/* 12 Runes Grid */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px',
-            padding: '12px',
-            borderRadius: 'var(--radius-md)',
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '6px',
             marginBottom: '16px',
-            fontSize: '12px',
-            color: 'var(--accent-amber)',
           }}
         >
-          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div>
-            <strong>Keep your seed phrase offline and secret.</strong> Anyone with these 12 words can impersonate your gamer ID and decrypt your messages. There are no password resets.
-          </div>
+          {words.map((w, idx) => (
+            <div
+              key={idx}
+              style={{
+                background: 'var(--void-2)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '6px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)' }}>
+                {String(idx + 1).padStart(2, '0')}
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#ffffff', fontWeight: 600 }}>
+                {w}
+              </span>
+            </div>
+          ))}
         </div>
 
-        {/* Logout / Switch Profile */}
-        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-          {showConfirmLogout ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--accent-rose)' }}>Clear key from device?</span>
-              <button
-                onClick={() => { logout(); onClose(); }}
-                className="cyber-button"
-                style={{ padding: '6px 12px', background: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}
-              >
-                Yes, Reset
-              </button>
-              <button
-                onClick={() => setShowConfirmLogout(false)}
-                className="cyber-button"
-                style={{ padding: '6px 10px', background: 'transparent' }}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowConfirmLogout(true)}
-              className="cyber-button"
-              style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--accent-rose)', borderColor: 'rgba(244, 63, 94, 0.3)', background: 'transparent' }}
-            >
-              <LogOut size={14} />
-              Reset / Switch Account
-            </button>
-          )}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+          <button
+            onClick={copySeed}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: copiedSeed ? 'var(--status-online)' : 'var(--text-silver)',
+              padding: '6px 14px',
+              fontFamily: 'var(--font-display)',
+              fontSize: '11px',
+              letterSpacing: '0.15em',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <IconCopyBlade size={12} />
+            <span>{copiedSeed ? 'RUNES COPIED' : 'COPY ALL 12 RUNES'}</span>
+          </button>
         </div>
+
+        {/* Logout / Sever Identity */}
+        <BladeDivider label="DANGER ZONE" />
+
+        {!showConfirmLogout ? (
+          <ChromeButton
+            variant="danger"
+            size="md"
+            onClick={() => setShowConfirmLogout(true)}
+            icon={<IconTrashFlame size={14} color="#fca5a5" />}
+            style={{ width: '100%' }}
+          >
+            INCINERATE LOCAL VAULT & LOGOUT
+          </ChromeButton>
+        ) : (
+          <div
+            style={{
+              padding: '12px',
+              background: 'rgba(139, 52, 52, 0.15)',
+              border: '1px solid rgba(139, 52, 52, 0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div style={{ fontSize: '12px', color: '#fca5a5', lineHeight: 1.4 }}>
+              Are you certain? Ensure you have secured your 12 runes. All local keys will be permanently purged.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <ChromeButton variant="ghost" size="sm" onClick={() => setShowConfirmLogout(false)}>
+                ABORT
+              </ChromeButton>
+              <ChromeButton
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  SoundEngine.playBladeTick();
+                  logout();
+                  onClose();
+                }}
+              >
+                CONFIRM PURGE
+              </ChromeButton>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

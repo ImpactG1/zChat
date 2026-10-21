@@ -95,7 +95,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
   if (!contact) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--void-0)' }}>
-        <p className="tracked-micro">LOCATING WHISPER CHANNEL...</p>
+        <p className="tracked-micro">OPENING PRIVATE CHAT...</p>
       </div>
     );
   }
@@ -255,11 +255,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '4px' }}>
             <IconShieldLock size={12} color="var(--status-encrypted)" />
             <span className="tracked-micro" style={{ color: 'var(--text-silver)' }}>
-              END-TO-END ENCRYPTED WHISPER
+              END-TO-END ENCRYPTED PRIVATE CHAT
             </span>
           </div>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
-            Payloads are gift-wrapped with ephemeral Diffie-Hellman keys. No relay or third party can observe content or metadata.
+            Messages are private and encrypted end-to-end. Only you and this person can read them.
           </p>
         </div>
 
@@ -344,7 +344,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
       >
         {[
           { label: '⚔ PERIMETER OK', text: 'Perimeter verified. Awaiting coordinate confirmation.' },
-          { label: '✦ KEY VERIFIED', text: 'Key fingerprint matches sanctum matrix. Channel secure.' },
+          { label: '✦ VERIFIED', text: 'Chat connection verified. Channel secure.' },
           { label: '🛡 SILENT PROTOCOL', text: 'Engaging silent protocol. Relay traffic minimized.' },
           { label: '🎙 VOICE DISPATCH', action: () => setShowVoiceNote((v) => !v) },
         ].map((item, idx) => (
@@ -416,7 +416,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
         {/* Message Input */}
         <div style={{ flex: 1 }}>
           <BladeInput
-            placeholder={`Seal whisper for ${contact.alias}${contact.tag}...`}
+            placeholder={`Message ${contact.alias}${contact.tag}...`}
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             style={{ height: '42px' }}
@@ -432,7 +432,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
           icon={<IconBladeSend size={15} color="#000" />}
           style={{ height: '42px', minHeight: '42px', padding: '0 16px' }}
         >
-          SEAL
+          SEND
         </ChromeButton>
       </form>
     </div>

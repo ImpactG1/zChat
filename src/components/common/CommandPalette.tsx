@@ -28,12 +28,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const commands: CommandItem[] = [
-    { key: 'new_sanctum', label: 'Form New Sanctum (Group)', group: 'Sanctums', icon: <IconBladeSend size={14} />, shortcut: 'N' },
-    { key: 'new_whisper', label: 'Forge Whisper Channel (1:1)', group: 'Whispers', icon: <IconSearchLoupe size={14} />, shortcut: 'W' },
+    { key: 'new_sanctum', label: 'Create New Group', group: 'Groups', icon: <IconBladeSend size={14} />, shortcut: 'N' },
+    { key: 'new_whisper', label: 'New Private Chat (1:1)', group: 'Private', icon: <IconSearchLoupe size={14} />, shortcut: 'W' },
     { key: 'toggle_overlay', label: 'Launch Floating Overlay HUD', group: 'HUD', icon: <IconBubbleOverlay size={14} />, shortcut: 'O' },
-    { key: 'relays', label: 'Inspect Relay Mesh Pool', group: 'Network', icon: <IconRelayTower size={14} />, shortcut: 'R' },
-    { key: 'backup', label: 'Reveal 12 Runes of Recall', group: 'Security', icon: <IconKeyVault size={14} />, shortcut: 'B' },
-    { key: 'settings', label: 'Sanctum Preferences & Themes', group: 'System', icon: <IconSettingsGears size={14} />, shortcut: 'S' },
+    { key: 'relays', label: 'Inspect Relay Network Pool', group: 'Network', icon: <IconRelayTower size={14} />, shortcut: 'R' },
+    { key: 'backup', label: 'Reveal 12 Secret Recovery Words', group: 'Security', icon: <IconKeyVault size={14} />, shortcut: 'B' },
+    { key: 'settings', label: 'Preferences & Themes', group: 'System', icon: <IconSettingsGears size={14} />, shortcut: 'S' },
   ];
 
   const filtered = commands.filter((c) =>
@@ -116,7 +116,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
           <input
             type="text"
             autoFocus
-            placeholder="Type a command or summon action..."
+            placeholder="Type a command or search action..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{

@@ -161,7 +161,7 @@ export const SplashOnboarding: React.FC = () => {
           >
             {/* Liquid Chrome Emblem (Real Logo) */}
             <div style={{ marginBottom: '28px', position: 'relative' }}>
-              <EmblemLogo size={132} glow shimmer />
+              <EmblemLogo size={132} />
             </div>
 
             {/* Monolithic Display Title */}
@@ -294,7 +294,7 @@ export const SplashOnboarding: React.FC = () => {
               <span className="tracked-micro">RITUAL PHASE I</span>
             </div>
 
-            <EmblemLogo size={48} glow />
+            <EmblemLogo size={48} />
 
             <h2
               style={{
@@ -541,7 +541,7 @@ export const SplashOnboarding: React.FC = () => {
               <span className="tracked-micro">RECOVERY COVENANT</span>
             </div>
 
-            <EmblemLogo size={48} glow />
+            <EmblemLogo size={48} />
 
             <h2
               style={{

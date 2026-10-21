@@ -89,14 +89,14 @@ export const JoinSquadModal: React.FC<JoinSquadModalProps> = ({ onClose, onSquad
             margin: 0,
           }}
         >
-          ENTER SANCTUM CODE
+          ENTER ROOM CODE
         </h3>
 
         <BladeInput
           label="6-DIGIT ROOM IDENTIFIER"
           value={squadCode}
           onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
-          placeholder="e.g. SQUAD-42, SANCTUM-99"
+          placeholder="e.g. SQUAD-42, ROOM-99"
           required
           autoFocus
         />
@@ -126,7 +126,7 @@ export const JoinSquadModal: React.FC<JoinSquadModalProps> = ({ onClose, onSquad
             type="submit"
             isLoading={isJoining}
           >
-            JOIN MESH
+            JOIN ROOM
           </ChromeButton>
         </div>
       </form>

@@ -12,7 +12,6 @@ export interface EmblemLogoProps {
 
 export const EmblemLogo: React.FC<EmblemLogoProps> = ({
   size = 36,
-  glow = false,
   className = '',
   style,
   onClick,
@@ -35,20 +34,6 @@ export const EmblemLogo: React.FC<EmblemLogoProps> = ({
         ...style,
       }}
     >
-      {/* Subtle Specular Ambient Halo behind the chrome emblem */}
-      {glow && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: '-10%',
-            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, rgba(200, 210, 225, 0.04) 45%, transparent 70%)',
-            filter: 'blur(8px)',
-            pointerEvents: 'none',
-            zIndex: 0,
-          }}
-        />
-      )}
-
       {/* High-Res Liquid Chrome Logo - Clean, razor-sharp & static */}
       <img
         src="/logo.png"
@@ -57,11 +42,6 @@ export const EmblemLogo: React.FC<EmblemLogoProps> = ({
           width: '100%',
           height: '100%',
           objectFit: 'contain',
-          mixBlendMode: 'screen',
-          filter: glow
-            ? 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.35)) drop-shadow(0 0 20px rgba(220, 230, 255, 0.15)) brightness(1.18) contrast(1.12)'
-            : 'brightness(1.08) contrast(1.08)',
-          imageRendering: '-webkit-optimize-contrast',
           position: 'relative',
           zIndex: 1,
         }}
@@ -70,3 +50,4 @@ export const EmblemLogo: React.FC<EmblemLogoProps> = ({
     </div>
   );
 };
+

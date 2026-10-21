@@ -12,7 +12,7 @@ interface HostSquadModalProps {
 
 export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquadCreated }) => {
   const { createSquad } = useP2PStore();
-  const defaultCode = `SANCTUM-${Math.floor(10 + Math.random() * 90)}`;
+  const defaultCode = `SQUAD-${Math.floor(10 + Math.random() * 90)}`;
   const [squadCode, setSquadCode] = useState(defaultCode);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -62,7 +62,7 @@ export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquad
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="tracked-micro">DIRECT P2P MESH</span>
+          <span className="tracked-micro">DIRECT P2P ROOM</span>
           <button
             type="button"
             onClick={() => {
@@ -85,20 +85,20 @@ export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquad
             margin: 0,
           }}
         >
-          HOST SANCTUM MESH
+          CREATE P2P ROOM
         </h3>
 
         <BladeInput
-          label="SANCTUM PARTY CODE"
+          label="ROOM CODE"
           value={squadCode}
           onChange={(e) => setSquadCode(e.target.value.toUpperCase())}
-          placeholder="e.g. SANCTUM-99"
+          placeholder="e.g. SQUAD-99"
           required
           autoFocus
         />
 
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-          Hosts an instantaneous sub-25ms WebRTC direct mesh room without server relay intermediaries.
+          Creates a direct peer-to-peer room for fast chat with your friends.
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -120,7 +120,7 @@ export const HostSquadModal: React.FC<HostSquadModalProps> = ({ onClose, onSquad
             type="submit"
             isLoading={isCreating}
           >
-            IGNITE MESH
+            CREATE ROOM
           </ChromeButton>
         </div>
       </form>

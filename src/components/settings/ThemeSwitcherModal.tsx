@@ -46,10 +46,10 @@ export const ThemeSwitcherModal: React.FC<ThemeSwitcherModalProps> = ({ onClose 
       const ok = await importFullBackup(content);
       if (ok) {
         SoundEngine.playSealChime();
-        setImportStatus('Sanctum vault restored successfully. Rekindling...');
+        setImportStatus('Chat vault restored successfully. Loading...');
         setTimeout(() => window.location.reload(), 1500);
       } else {
-        setImportStatus('Invalid covenant backup JSON.');
+        setImportStatus('Invalid backup JSON file.');
       }
     };
     reader.readAsText(file);
@@ -104,7 +104,7 @@ export const ThemeSwitcherModal: React.FC<ThemeSwitcherModalProps> = ({ onClose 
                 margin: 0,
               }}
             >
-              SANCTUM PREFERENCES
+              SETTINGS & PREFERENCES
             </h3>
           </div>
           <button

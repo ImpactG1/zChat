@@ -87,7 +87,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
   };
 
   const copyInviteLink = () => {
-    navigator.clipboard.writeText(`https://zenyth.chat/join?sanctum=${groupId}`);
+    navigator.clipboard.writeText(`https://zenyth.chat/join?group=${groupId}`);
     setCopiedInvite(true);
     SoundEngine.playBladeTick();
     setTimeout(() => setCopiedInvite(false), 2000);
@@ -96,7 +96,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
   if (!group) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--void-0)' }}>
-        <p className="tracked-micro">LOCATING SANCTUM...</p>
+        <p className="tracked-micro">OPENING GROUP...</p>
       </div>
     );
   }
@@ -166,12 +166,12 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '1px' }}>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {group.members.length} Warriors in Sanctum
+                {group.members.length} Members in Group
               </span>
               {isLeader && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--status-warning)', fontSize: '10px', fontFamily: 'var(--font-mono)' }}>
                   <IconCrown size={11} color="var(--status-warning)" />
-                  VANGUARD LEADER
+                  GROUP ADMIN
                 </span>
               )}
             </div>
@@ -241,11 +241,11 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '2px' }}>
             <IconShieldLock size={12} color="var(--status-encrypted)" />
             <span className="tracked-micro" style={{ color: 'var(--text-silver)' }}>
-              SANCTUM SYMMETRIC RATCHET
+              GROUP ENCRYPTION ACTIVE
             </span>
           </div>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
-            Every transmission is sealed with Epoch {group.currentEpoch} shared key. Key rotations provide forward secrecy.
+            Every message in this group is encrypted with a private shared key.
           </p>
         </div>
 
@@ -258,7 +258,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
               content={msg.content}
               timestamp={msg.timestamp}
               isSelf={isSelf}
-              senderName={isSelf ? undefined : 'Warrior'}
+              senderName={isSelf ? undefined : 'Member'}
               senderTag={isSelf ? undefined : msg.senderTag}
               status={msg.status}
               reactions={
@@ -363,7 +363,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
 
         <div style={{ flex: 1 }}>
           <BladeInput
-            placeholder={`Broadcast order to ${group.name}...`}
+            placeholder={`Message ${group.name}...`}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             style={{ height: '42px' }}
@@ -378,7 +378,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
           icon={<IconBladeSend size={15} color="#000" />}
           style={{ height: '42px', minHeight: '42px', padding: '0 16px' }}
         >
-          BROADCAST
+          SEND
         </ChromeButton>
       </form>
 
@@ -399,7 +399,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="tracked-micro">INVITATION COVENANT</span>
+              <span className="tracked-micro">GROUP INVITE</span>
               <button
                 type="button"
                 onClick={() => setShowInviteModal(false)}
@@ -424,11 +424,11 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
                 wordBreak: 'break-all',
               }}
             >
-              https://zenyth.chat/join?sanctum={groupId}
+              https://zenyth.chat/join?group={groupId}
             </div>
 
             <ChromeButton variant="solid" size="md" onClick={copyInviteLink}>
-              {copiedInvite ? 'LINK COPIED' : 'COPY INVITATION LINK'}
+              {copiedInvite ? 'LINK COPIED' : 'COPY INVITE LINK'}
             </ChromeButton>
           </div>
         </div>

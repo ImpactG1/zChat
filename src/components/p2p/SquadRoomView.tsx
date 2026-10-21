@@ -106,7 +106,7 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
                   color: '#ffffff',
                 }}
               >
-                SANCTUM: {roomState.code}
+                ROOM: {roomState.code}
               </span>
 
               <button
@@ -173,7 +173,7 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
               cursor: 'pointer',
               borderRadius: '2px',
             }}
-            title="Leave Sanctum"
+            title="Leave Room"
           >
             DISCONNECT
           </button>
@@ -265,10 +265,10 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
             }}
           >
             <div className="font-display" style={{ fontSize: '13px', letterSpacing: '0.2em', color: '#ffffff', marginBottom: '4px' }}>
-              SANCTUM CHANNEL ACTIVE
+              ROOM CHANNEL ACTIVE
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              Direct WebRTC peer mesh open. Transmit orders below.
+              Direct room connected. Send messages below.
             </p>
           </div>
         ) : (
@@ -304,7 +304,7 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
       >
         <div style={{ flex: 1 }}>
           <BladeInput
-            placeholder={`Transmit to Sanctum ${roomState.code}...`}
+            placeholder={`Message Room ${roomState.code}...`}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             style={{ height: '42px' }}
@@ -319,7 +319,7 @@ export const SquadRoomView: React.FC<SquadRoomViewProps> = ({ onBack }) => {
           icon={<IconBladeSend size={15} color="#000" />}
           style={{ height: '42px', minHeight: '42px', padding: '0 16px' }}
         >
-          SEAL
+          SEND
         </ChromeButton>
       </form>
     </div>

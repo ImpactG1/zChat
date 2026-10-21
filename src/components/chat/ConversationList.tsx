@@ -171,7 +171,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           }}
         >
           <span style={{ fontSize: '9px', opacity: tab === 'groups' ? 1 : 0.4 }}>◆</span>
-          <span>SANCTUMS</span>
+          <span>GROUPS</span>
         </button>
 
         <button
@@ -201,11 +201,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           }}
         >
           <span style={{ fontSize: '9px', opacity: tab === 'direct' ? 1 : 0.4 }}>◆</span>
-          <span>WHISPERS</span>
+          <span>PRIVATE</span>
         </button>
       </div>
 
-      {/* TAB 1: SANCTUMS / GROUPS */}
+      {/* TAB 1: GROUPS */}
       {tab === 'groups' ? (
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {/* Quick Tactical Action Blades */}
@@ -217,7 +217,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               icon={<IconCrown size={13} />}
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              + FORM NEW SANCTUM
+              + CREATE NEW GROUP
             </ChromeButton>
             <div style={{ display: 'flex', gap: '6px' }}>
               <ChromeButton
@@ -275,10 +275,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h4 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', letterSpacing: '0.15em', color: '#ffffff', margin: 0 }}>
-                    SANCTUM: {roomState.code}
+                    ROOM: {roomState.code}
                   </h4>
                   <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                    {Object.keys(roomState.peers).length + 1} Warriors in Mesh
+                    {Object.keys(roomState.peers).length + 1} Members in Room
                   </p>
                 </div>
                 <IconChevron size={14} direction="right" color="var(--text-silver)" />
@@ -286,10 +286,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </div>
           )}
 
-          {/* Pinned Sanctums List */}
+          {/* Pinned Groups List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div className="tracked-micro" style={{ paddingLeft: '4px', margin: '4px 0 2px' }}>
-              PINNED SANCTUMS ({groups.length})
+              GROUPS ({groups.length})
             </div>
 
             {groups.length === 0 ? (
@@ -305,10 +305,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               >
                 <IconCrown size={28} color="var(--text-muted)" style={{ margin: '0 auto 10px', opacity: 0.6 }} />
                 <div className="font-display" style={{ fontSize: '12px', letterSpacing: '0.2em', color: '#ffffff', marginBottom: '6px' }}>
-                  NO ACTIVE SANCTUMS
+                  NO ACTIVE GROUPS
                 </div>
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '260px', margin: '0 auto 14px', lineHeight: 1.5 }}>
-                  Form an encrypted group sanctum or host a direct P2P mesh room to rally your squad.
+                  Create an encrypted group or host a P2P room to chat with your friends.
                 </p>
                 <ChromeButton
                   variant="outline"
@@ -317,7 +317,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   icon={<IconCrown size={12} />}
                   style={{ margin: '0 auto' }}
                 >
-                  FORM SANCTUM
+                  CREATE GROUP
                 </ChromeButton>
               </div>
             ) : (
@@ -409,7 +409,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                         maxWidth: '280px',
                       }}
                     >
-                      {group.lastMessage || 'Sanctum sealed with symmetric key.'}
+                      {group.lastMessage || 'Group created.'}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -432,7 +432,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           </div>
         </div>
       ) : (
-        /* TAB 2: DIRECT WHISPER CHANNELS */
+        /* TAB 2: PRIVATE CHANNELS */
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Search & Add Blade Bar */}
           <div style={{ padding: '8px 12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -454,7 +454,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               }}
               style={{ minHeight: '38px', padding: '0 14px' }}
             >
-              + FORGE
+              + NEW CHAT
             </ChromeButton>
           </div>
 
@@ -473,10 +473,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               >
                 <IconShieldLock size={32} color="var(--text-muted)" style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                 <div className="font-display" style={{ fontSize: '13px', letterSpacing: '0.2em', color: '#ffffff', marginBottom: '4px' }}>
-                  NO ACTIVE WHISPERS
+                  NO PRIVATE CHATS
                 </div>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '280px', margin: '0 auto' }}>
-                  No channels found in this sector. Forge a new whisper with a peer public key.
+                  No channels found in this sector. Start a new chat using a friend's public key or npub.
                 </p>
               </div>
             ) : (
@@ -584,7 +584,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                             maxWidth: '240px',
                           }}
                         >
-                          {contact.lastMessage || 'End-to-end encrypted whisper.'}
+                          {contact.lastMessage || 'End-to-end encrypted message.'}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -615,7 +615,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         </div>
       )}
 
-      {/* Form Sanctum Modal */}
+      {/* Form Group Modal */}
       {showCreateGroupModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
           <form
@@ -633,7 +633,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="tracked-micro">NEW COVENANT</span>
+              <span className="tracked-micro">NEW GROUP</span>
               <button
                 type="button"
                 onClick={() => setShowCreateGroupModal(false)}
@@ -644,20 +644,20 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </div>
 
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', letterSpacing: '0.18em', color: '#ffffff', textTransform: 'uppercase', margin: 0 }}>
-              FORM SANCTUM
+              CREATE GROUP
             </h3>
 
             <BladeInput
-              label="SANCTUM NAME"
+              label="GROUP NAME"
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="e.g. SQUAD ALPHA, RAID PARTY"
+              placeholder="e.g. Squad Alpha, Gaming Buddies"
               autoFocus
               required
             />
 
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              A symmetric Epoch I key will be generated and distributed to members with forward secrecy.
+              A private encryption key will be created so only group members can read messages.
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -665,14 +665,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 CANCEL
               </ChromeButton>
               <ChromeButton variant="solid" size="sm" type="submit">
-                SEAL SANCTUM
+                CREATE GROUP
               </ChromeButton>
             </div>
           </form>
         </div>
       )}
 
-      {/* Add Teammate / Forge Whisper Modal */}
+      {/* Add Friend / Start Private Chat Modal */}
       {showAddContactModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 100 }}>
           <form
@@ -690,7 +690,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="tracked-micro">FORGE WHISPER</span>
+              <span className="tracked-micro">NEW PRIVATE CHAT</span>
               <button
                 type="button"
                 onClick={() => setShowAddContactModal(false)}
@@ -701,11 +701,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </div>
 
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', letterSpacing: '0.18em', color: '#ffffff', textTransform: 'uppercase', margin: 0 }}>
-              ADD PEER BY PUBKEY
+              ADD FRIEND BY PUBLIC KEY
             </h3>
 
             <BladeInput
-              label="PEER PUBLIC KEY (64-CHAR HEX OR NPUB1...)"
+              label="FRIEND'S PUBLIC KEY (NPUB OR HEX)"
               value={newKeyInput}
               onChange={(e) => setNewKeyInput(e.target.value)}
               placeholder="npub1... or hex key"
@@ -714,10 +714,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             />
 
             <BladeInput
-              label="WARRIOR ALIAS"
+              label="NICKNAME / NAME"
               value={newAliasInput}
               onChange={(e) => setNewAliasInput(e.target.value)}
-              placeholder="e.g. Viper"
+              placeholder="e.g. Alex"
             />
 
             {errorMsg && (
@@ -731,7 +731,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 CANCEL
               </ChromeButton>
               <ChromeButton variant="solid" size="sm" type="submit">
-                ENGAGE WHISPER
+                START CHAT
               </ChromeButton>
             </div>
           </form>

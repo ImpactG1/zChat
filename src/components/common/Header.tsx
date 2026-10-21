@@ -95,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
       >
         {/* Brand & User Tag */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px', minWidth: 0 }}>
-          <EmblemLogo size={isMobile ? 28 : 36} glow shimmer />
+          <EmblemLogo size={isMobile ? 28 : 36} />
 
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -175,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenRelays, onOpenSeed, onOpen
                       letterSpacing: '0.06em',
                     }}
                   >
-                    {isMobile ? `⚡${roomState.code}` : `SANCTUM: ${roomState.code}`}
+                    {isMobile ? `⚡${roomState.code}` : `ROOM: ${roomState.code}`}
                   </span>
                 )}
               </div>

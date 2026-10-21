@@ -105,7 +105,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
     setTimeout(() => setCopiedKey(false), 2000);
   };
 
-  // Build warrior roster dynamically from sanctum members
+  // Build member roster dynamically from group members
   const warriors = selectedGroup
     ? [
         ...(identity
@@ -114,7 +114,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
                 pubkey: identity.pubkey,
                 alias: `${identity.displayName} (YOU)`,
                 tag: identity.tag,
-                role: selectedGroup.adminPubkey === identity.pubkey ? 'SANCTUM MASTER' : 'WARRIOR',
+                role: selectedGroup.adminPubkey === identity.pubkey ? 'GROUP ADMIN' : 'MEMBER',
                 ping: 'HOST',
                 isSelf: true,
               },
@@ -126,9 +126,9 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
             const c = memberContacts.find((mc) => mc.pubkey === pk);
             return {
               pubkey: pk,
-              alias: c?.alias || `OPERATIVE#${pk.slice(0, 4)}`,
+              alias: c?.alias || `MEMBER#${pk.slice(0, 4)}`,
               tag: c?.tag || `#${pk.slice(0, 4)}`,
-              role: selectedGroup.adminPubkey === pk ? 'SANCTUM MASTER' : 'OPERATIVE',
+              role: selectedGroup.adminPubkey === pk ? 'GROUP ADMIN' : 'MEMBER',
               ping: 'VERIFIED',
               isSelf: false,
             };
@@ -200,7 +200,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
               textAlign: 'center',
             }}
           >
-            <EmblemLogo size={110} glow shimmer />
+            <EmblemLogo size={110} />
 
             <h2
               style={{
@@ -216,7 +216,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
             </h2>
 
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '400px', marginBottom: '28px', lineHeight: 1.6 }}>
-              Select a sanctum or whisper channel from the sidebar to engage encrypted communication.
+              Select a group or private chat from the sidebar to start messaging.
             </p>
 
             <button
@@ -322,7 +322,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
               </div>
             </div>
 
-            <BladeDivider label="TACTICAL WHISPER ACTIONS" />
+            <BladeDivider label="CHAT ACTIONS" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <ChromeButton
                 variant="outline"
@@ -359,18 +359,18 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
                 <TrackedBadge label={`EPOCH ${selectedGroup.currentEpoch}`} variant="chrome" />
-                <TrackedBadge label="COVENANT SEALED" variant="neutral" />
+                <TrackedBadge label="ENCRYPTED" variant="neutral" />
               </div>
             </div>
 
             <BladeDivider label="CRYPTOGRAPHIC MATRIX" />
             <KeyFingerprintVisualizer pubkey={selectedGroup.groupKeyHex} tag={`EPOCH-00${selectedGroup.currentEpoch}`} />
 
-            <BladeDivider label="SANCTUM COVENANT" />
+            <BladeDivider label="GROUP INFO" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', background: 'var(--void-0)', padding: '10px 12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
-                <span>Active Warriors</span>
-                <span style={{ color: '#ffffff', fontFamily: 'var(--font-mono)' }}>{warriors.length} Operatives</span>
+                <span>Active Members</span>
+                <span style={{ color: '#ffffff', fontFamily: 'var(--font-mono)' }}>{warriors.length} Members</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
                 <span>Forward Secrecy</span>
@@ -386,7 +386,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
               </div>
             </div>
 
-            <BladeDivider label={`WARRIORS IN SANCTUM (${warriors.length})`} />
+            <BladeDivider label={`MEMBERS IN GROUP (${warriors.length})`} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {warriors.map((w) => (
                 <div
@@ -449,7 +449,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
                           fontFamily: 'var(--font-mono)',
                           borderRadius: '2px',
                         }}
-                        title="Whisper Privately"
+                        title="Private Chat"
                       >
                         <IconChevron size={10} />
                       </button>
@@ -459,7 +459,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
               ))}
             </div>
 
-            <BladeDivider label="TACTICAL SANCTUM ACTIONS" />
+            <BladeDivider label="GROUP ACTIONS" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <ChromeButton
                 variant="solid"
@@ -467,7 +467,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
                 onClick={handleRekeyGroup}
                 icon={<IconShieldLock size={13} color="#000" />}
               >
-                ROTATE KEY (EPOCH RATCHET)
+                ROTATE ENCRYPTION KEY
               </ChromeButton>
 
               <ChromeButton
@@ -476,7 +476,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
                 onClick={handleSignalBeacon}
                 icon={<IconRelayTower size={13} />}
               >
-                SIGNAL COVENANT BEACON
+                REFRESH GROUP SYNC
               </ChromeButton>
             </div>
 

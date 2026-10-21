@@ -280,7 +280,7 @@ export const FloatingOverlayHUD: React.FC = () => {
             height: '56px',
             background: 'var(--void-1)',
             border: '1.5px solid rgba(255, 255, 255, 0.45)',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.8)',
             clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
             cursor: isDraggingBubble ? 'grabbing' : 'pointer',
             display: 'flex',
@@ -292,7 +292,7 @@ export const FloatingOverlayHUD: React.FC = () => {
           }}
           title="Zenyth HUD Sigil (Click to open chat in top-left)"
         >
-          <EmblemLogo size={42} glow />
+          <EmblemLogo size={42} />
 
           {/* Unread Stack Badge */}
           {activeContact && activeContact.unreadCount > 0 && (
@@ -628,7 +628,7 @@ export const FloatingOverlayHUD: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <EmblemLogo size={26} glow />
+              <EmblemLogo size={26} />
               <div>
                 <div
                   style={{
@@ -766,7 +766,7 @@ export const FloatingOverlayHUD: React.FC = () => {
               ))
             ) : (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-silver)', fontSize: '12px', fontFamily: 'var(--font-mono)', background: 'rgba(12, 14, 18, 0.5)' }}>
-                NO TRANSMISSIONS YET
+                NO MESSAGES YET
               </div>
             )}
           </div>
@@ -785,7 +785,7 @@ export const FloatingOverlayHUD: React.FC = () => {
           >
             <input
               type="text"
-              placeholder={activeContact ? `Transmit to ${activeContact.alias}...` : 'Select or forge a whisper channel first...'}
+              placeholder={activeContact ? `Message ${activeContact.alias}...` : 'Select or start a private chat first...'}
               value={replyText}
               disabled={!activeContact}
               onChange={(e) => setReplyText(e.target.value)}
@@ -808,7 +808,7 @@ export const FloatingOverlayHUD: React.FC = () => {
               icon={<IconBladeSend size={13} color="#000" />}
               style={{ height: '38px', minHeight: '38px', padding: '0 14px' }}
             >
-              SEAL
+              SEND
             </ChromeButton>
           </form>
 

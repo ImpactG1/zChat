@@ -242,25 +242,7 @@ body, html {
   animation: bladeSliceIn var(--duration-slice) var(--ease-slice) forwards;
 }
 
-@keyframes specularShimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
 
-.anim-shimmer {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: specularShimmer var(--duration-shimmer) infinite linear;
-}
 
 
 /* Respect Reduced Motion */

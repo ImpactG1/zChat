@@ -13,7 +13,6 @@ export interface EmblemLogoProps {
 export const EmblemLogo: React.FC<EmblemLogoProps> = ({
   size = 36,
   glow = false,
-  shimmer = false,
   className = '',
   style,
   onClick,
@@ -50,7 +49,7 @@ export const EmblemLogo: React.FC<EmblemLogoProps> = ({
         />
       )}
 
-      {/* Actual High-Res Liquid Chrome Logo */}
+      {/* High-Res Liquid Chrome Logo - Clean, razor-sharp & static */}
       <img
         src="/logo.png"
         alt={alt}
@@ -68,21 +67,6 @@ export const EmblemLogo: React.FC<EmblemLogoProps> = ({
         }}
         draggable={false}
       />
-
-      {/* Shimmer sweep effect if enabled */}
-      {shimmer && (
-        <div
-          className="anim-shimmer"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
-            zIndex: 2,
-            mixBlendMode: 'screen',
-            opacity: 0.35,
-          }}
-        />
-      )}
     </div>
   );
 };

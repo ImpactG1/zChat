@@ -56,7 +56,7 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
   },
 
   setOpacity: async (val: number) => {
-    const clamped = Math.max(10, Math.min(100, val));
+    const clamped = Math.max(0, Math.min(100, val));
     set({ opacity: clamped });
     await OverlayBridge.setOpacity(clamped);
   },

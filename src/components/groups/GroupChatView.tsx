@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/core/storage/db';
 import { GroupManager } from '@/core/groups/groupManager';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { MockService } from '@/services/mockDataService';
 import { MessageBubble } from '@/components/design-system/MessageBubble';
 import { ChromeButton } from '@/components/design-system/ChromeButton';
 import { BladeInput } from '@/components/design-system/BladeInput';
@@ -28,19 +27,15 @@ interface GroupChatViewProps {
 export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack }) => {
   const { identity } = useAuthStore();
 
-  const group = useLiveQuery(async () => {
-    const g = await db.groups.get(groupId);
-    if (g) return g;
-    return MockService.getGroups().find((item) => item.id === groupId);
-  }, [groupId]) ?? MockService.getGroups().find((item) => item.id === groupId);
+  const group = useLiveQuery(
+    () => db.groups.get(groupId),
+    [groupId]
+  );
 
-  const dbMessages = useLiveQuery(
+  const messages = useLiveQuery(
     () => db.groupMessages.where('groupId').equals(groupId).sortBy('timestamp'),
     [groupId]
   ) ?? [];
-
-  const mockMessages = MockService.getGroupMessages(groupId);
-  const messages = dbMessages.length > 0 ? dbMessages : mockMessages;
 
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -72,9 +67,8 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
 
     try {
       await GroupManager.sendGroupMessage(groupId, text);
-      MockService.sendGroupMessage(groupId, text);
-    } catch {
-      MockService.sendGroupMessage(groupId, text);
+    } catch (err) {
+      console.error('Failed to dispatch group message:', err);
     } finally {
       setIsSending(false);
     }
@@ -85,9 +79,8 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({ groupId, onBack })
     SoundEngine.playSealChime();
     try {
       await GroupManager.rotateGroupKey(groupId);
-    } catch {
-      // simulate in mock service
-      if (group) group.currentEpoch += 1;
+    } catch (err) {
+      console.error('Failed to rotate group key:', err);
     } finally {
       setIsRotating(false);
     }

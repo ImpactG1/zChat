@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/core/storage/db';
-import { Contact, GroupChat } from '@/types';
+import { Contact } from '@/types';
 import { parsePubkeyInput } from '@/core/crypto/keys';
 import { useP2PStore } from '@/stores/useP2PStore';
-import { MockService } from '@/services/mockDataService';
+import { GroupManager } from '@/core/groups/groupManager';
 import { HostSquadModal } from '@/components/p2p/HostSquadModal';
 import { JoinSquadModal } from '@/components/p2p/JoinSquadModal';
 import { ChromeButton } from '@/components/design-system/ChromeButton';
@@ -38,24 +38,23 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const [tab, setTab] = useState<'groups' | 'direct'>('groups');
   const { roomState } = useP2PStore();
 
-  // Load contacts from DB, seeding with MockService if empty
+  // Load contacts dynamically from Dexie DB
   const contacts = useLiveQuery(async () => {
     try {
-      const list = await db.contacts.toArray();
-      if (list.length === 0) {
-        for (const c of MockService.getContacts()) {
-          await db.contacts.put(c);
-        }
-        return MockService.getContacts();
-      }
-      return list.sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
+      return await db.contacts.orderBy('lastTimestamp').reverse().toArray();
     } catch {
-      return MockService.getContacts();
+      return [];
     }
-  }) ?? MockService.getContacts();
+  }) ?? [];
 
-  // Load groups from MockService
-  const [groups, setGroups] = useState<GroupChat[]>(() => MockService.getGroups());
+  // Load groups dynamically from Dexie DB
+  const groups = useLiveQuery(async () => {
+    try {
+      return await db.groups.orderBy('lastTimestamp').reverse().toArray();
+    } catch {
+      return [];
+    }
+  }) ?? [];
 
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showHostSquadModal, setShowHostSquadModal] = useState(false);
@@ -104,15 +103,21 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     onSelectContact(hexPubkey);
   };
 
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
-    const newG = MockService.createGroup(newGroupName.trim(), contacts.slice(0, 3).map((c) => c.pubkey));
-    setGroups(MockService.getGroups());
-    SoundEngine.playSealChime();
-    setShowCreateGroupModal(false);
-    setNewGroupName('');
-    onSelectGroup(newG.id);
+    try {
+      const newG = await GroupManager.createGroup(
+        newGroupName.trim(),
+        contacts.map((c) => c.pubkey)
+      );
+      SoundEngine.playSealChime();
+      setShowCreateGroupModal(false);
+      setNewGroupName('');
+      onSelectGroup(newG.id);
+    } catch (err) {
+      console.error('Failed to create sanctum:', err);
+    }
   };
 
   const formatTimestamp = (ts?: number) => {
@@ -146,10 +151,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           }}
           style={{
             flex: 1,
-            padding: '10px 14px',
+            padding: '8px 10px',
             fontFamily: 'var(--font-display)',
             fontSize: '11px',
-            letterSpacing: '0.22em',
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
             fontWeight: 700,
             cursor: 'pointer',
@@ -161,11 +166,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
+            gap: '6px',
+            whiteSpace: 'nowrap',
           }}
         >
           <span style={{ fontSize: '9px', opacity: tab === 'groups' ? 1 : 0.4 }}>◆</span>
-          <span>ACTIVE SANCTUMS</span>
+          <span>SANCTUMS</span>
         </button>
 
         <button
@@ -175,10 +181,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           }}
           style={{
             flex: 1,
-            padding: '10px 14px',
+            padding: '8px 10px',
             fontFamily: 'var(--font-display)',
             fontSize: '11px',
-            letterSpacing: '0.22em',
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
             fontWeight: 700,
             cursor: 'pointer',
@@ -190,11 +196,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
+            gap: '6px',
+            whiteSpace: 'nowrap',
           }}
         >
           <span style={{ fontSize: '9px', opacity: tab === 'direct' ? 1 : 0.4 }}>◆</span>
-          <span>WHISPER CHANNELS</span>
+          <span>WHISPERS</span>
         </button>
       </div>
 
@@ -285,9 +292,38 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               PINNED SANCTUMS ({groups.length})
             </div>
 
-            {groups.map((group) => {
-              const isSelected = group.id === activeGroupId;
-              const hasUnread = (group.unreadCount || 0) > 0;
+            {groups.length === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '36px 16px',
+                  background: 'var(--void-1)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  margin: '8px 0',
+                  clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                }}
+              >
+                <IconCrown size={28} color="var(--text-muted)" style={{ margin: '0 auto 10px', opacity: 0.6 }} />
+                <div className="font-display" style={{ fontSize: '12px', letterSpacing: '0.2em', color: '#ffffff', marginBottom: '6px' }}>
+                  NO ACTIVE SANCTUMS
+                </div>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '260px', margin: '0 auto 14px', lineHeight: 1.5 }}>
+                  Form an encrypted group sanctum or host a direct P2P mesh room to rally your squad.
+                </p>
+                <ChromeButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCreateGroupModal(true)}
+                  icon={<IconCrown size={12} />}
+                  style={{ margin: '0 auto' }}
+                >
+                  FORM SANCTUM
+                </ChromeButton>
+              </div>
+            ) : (
+              groups.map((group) => {
+                const isSelected = group.id === activeGroupId;
+                const hasUnread = (group.unreadCount || 0) > 0;
 
               return (
                 <div
@@ -392,7 +428,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
       ) : (

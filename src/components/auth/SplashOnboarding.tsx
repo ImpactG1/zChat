@@ -18,7 +18,7 @@ import {
 import { SoundEngine } from '@/core/feedback/soundEffects';
 
 export const SplashOnboarding: React.FC = () => {
-  const { createAccount, importAccount } = useAuthStore();
+  const { importAccount, setIdentity } = useAuthStore();
 
   // Steps: 'intro' | 'forge' | 'runes' | 'recall'
   const [step, setStep] = useState<'intro' | 'forge' | 'runes' | 'recall'>('intro');
@@ -74,8 +74,7 @@ export const SplashOnboarding: React.FC = () => {
   const handleSealAndEnter = () => {
     if (!forgedIdentity) return;
     SoundEngine.playSealChime();
-    // Directly inject forged identity into authStore
-    createAccount(forgedIdentity.displayName);
+    setIdentity(forgedIdentity);
   };
 
   const handleRecallSubmit = (e: React.FormEvent) => {

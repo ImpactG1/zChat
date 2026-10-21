@@ -78,11 +78,12 @@ export interface GroupMessage {
   id: string;
   groupId: string;
   senderPubkey: string;
-  senderTag: string;
+  senderTag?: string;
+  authorAlias?: string;
   content: string;
   timestamp: number;
-  epoch: number;
-  status: MessageDeliveryStatus;
+  epoch?: number;
+  status?: MessageDeliveryStatus;
 }
 
 export type GamerTheme = 'cyberpunk' | 'tactical' | 'crimson' | 'stealth';

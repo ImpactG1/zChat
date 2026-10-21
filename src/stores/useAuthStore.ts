@@ -9,6 +9,7 @@ interface AuthState {
   isInitialized: boolean;
   init: () => void;
   createAccount: (displayName: string) => UserIdentity;
+  setIdentity: (identity: UserIdentity) => void;
   importAccount: (mnemonic: string, displayName: string) => UserIdentity;
   logout: () => void;
 }
@@ -31,6 +32,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ identity: newIdentity });
     messageReceiver.startListening();
     return newIdentity;
+  },
+
+  setIdentity: (identity: UserIdentity) => {
+    KeyVault.saveIdentity(identity);
+    set({ identity });
+    messageReceiver.startListening();
   },
 
   importAccount: (mnemonic: string, displayName: string) => {

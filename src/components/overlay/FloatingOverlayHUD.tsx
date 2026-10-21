@@ -1,7 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/core/storage/db';
+import { sendDirectMessage } from '@/core/nostr/messageSender';
+import { Contact, ChatMessage } from '@/types';
 import { useOverlayStore } from '@/stores/useOverlayStore';
 import { EmblemLogo } from '@/components/common/EmblemLogo';
-import { MockService } from '@/services/mockDataService';
 import { MessageBubble } from '@/components/design-system/MessageBubble';
 import { ChromeButton } from '@/components/design-system/ChromeButton';
 import {
@@ -32,17 +35,21 @@ export const FloatingOverlayHUD: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
 
-  const activeContact = MockService.getContacts()[0]; // Viper#8f3a
-  const [messages, setMessages] = useState(() => MockService.getDirectMessages(activeContact.pubkey));
-  const [replyText, setReplyText] = useState('');
+  // Dynamically query latest active contact
+  const activeContact = useLiveQuery<Contact | undefined>(
+    () => db.contacts.orderBy('lastTimestamp').reverse().first()
+  );
 
-  // Update messages periodically or when new ones arrive
-  useEffect(() => {
-    const unsub = MockService.subscribe(() => {
-      setMessages(MockService.getDirectMessages(activeContact.pubkey));
-    });
-    return unsub;
-  }, [activeContact.pubkey]);
+  // Dynamically query messages for active contact
+  const messages = useLiveQuery<ChatMessage[]>(
+    async () => {
+      if (!activeContact?.pubkey) return [];
+      return db.messages.where('conversationId').equals(activeContact.pubkey).sortBy('timestamp');
+    },
+    [activeContact?.pubkey]
+  ) ?? [];
+
+  const [replyText, setReplyText] = useState('');
 
   if (!isEnabled) return null;
 
@@ -82,12 +89,17 @@ export const FloatingOverlayHUD: React.FC = () => {
     setPosition((prev) => ({ ...prev, x: snappedX }));
   };
 
-  const handleSendQuickReply = (e: React.FormEvent) => {
+  const handleSendQuickReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
+    if (!replyText.trim() || !activeContact) return;
     SoundEngine.playBladeTick();
-    MockService.sendDirectMessage(activeContact.pubkey, replyText.trim());
+    const text = replyText.trim();
     setReplyText('');
+    try {
+      await sendDirectMessage(activeContact.pubkey, text);
+    } catch (err) {
+      console.error('Failed to send overlay reply:', err);
+    }
   };
 
   const hudOpacityValue = opacity / 100;
@@ -134,7 +146,7 @@ export const FloatingOverlayHUD: React.FC = () => {
           <EmblemLogo size={42} glow />
 
           {/* Unread Stack Badge */}
-          {activeContact.unreadCount > 0 && (
+          {activeContact && activeContact.unreadCount > 0 && (
             <div
               style={{
                 position: 'absolute',
@@ -200,11 +212,13 @@ export const FloatingOverlayHUD: React.FC = () => {
                   fontWeight: 700,
                 }}
               >
-                {activeContact.alias.toUpperCase()}
+                {activeContact ? activeContact.alias.toUpperCase() : 'NO CHANNEL'}
               </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-                {activeContact.tag}
-              </span>
+              {activeContact && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                  {activeContact.tag}
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -253,24 +267,30 @@ export const FloatingOverlayHUD: React.FC = () => {
               gap: '6px',
             }}
           >
-            {messages.slice(-3).map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  padding: '8px 10px',
-                  background: msg.senderPubkey === activeContact.pubkey ? 'var(--void-2)' : 'var(--void-3)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '2px',
-                  fontSize: '12px',
-                  color: '#ffffff',
-                }}
-              >
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
-                  {msg.senderPubkey === activeContact.pubkey ? activeContact.alias : 'You'}
+            {activeContact && messages.length > 0 ? (
+              messages.slice(-3).map((msg) => (
+                <div
+                  key={msg.id}
+                  style={{
+                    padding: '8px 10px',
+                    background: msg.senderPubkey === activeContact.pubkey ? 'var(--void-2)' : 'var(--void-3)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '2px',
+                    fontSize: '12px',
+                    color: '#ffffff',
+                  }}
+                >
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
+                    {msg.senderPubkey === activeContact.pubkey ? activeContact.alias : 'You'}
+                  </div>
+                  {msg.content}
                 </div>
-                {msg.content}
+              ))
+            ) : (
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
+                NO RECENT SIGNALS
               </div>
-            ))}
+            )}
           </div>
 
           {/* Quick Reply Bar */}
@@ -448,18 +468,24 @@ export const FloatingOverlayHUD: React.FC = () => {
               gap: '6px',
             }}
           >
-            {messages.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                id={msg.id}
-                content={msg.content}
-                timestamp={msg.timestamp}
-                isSelf={msg.senderPubkey !== activeContact.pubkey}
-                senderName={msg.senderPubkey === activeContact.pubkey ? activeContact.alias : undefined}
-                senderTag={msg.senderPubkey === activeContact.pubkey ? activeContact.tag : undefined}
-                status={msg.status}
-              />
-            ))}
+            {activeContact && messages.length > 0 ? (
+              messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  id={msg.id}
+                  content={msg.content}
+                  timestamp={msg.timestamp}
+                  isSelf={msg.senderPubkey !== activeContact.pubkey}
+                  senderName={msg.senderPubkey === activeContact.pubkey ? activeContact.alias : undefined}
+                  senderTag={msg.senderPubkey === activeContact.pubkey ? activeContact.tag : undefined}
+                  status={msg.status}
+                />
+              ))
+            ) : (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
+                NO TRANSMISSIONS YET
+              </div>
+            )}
           </div>
 
           {/* Full Input Bar */}
@@ -475,8 +501,9 @@ export const FloatingOverlayHUD: React.FC = () => {
           >
             <input
               type="text"
-              placeholder={`Transmit to ${activeContact.alias}...`}
+              placeholder={activeContact ? `Transmit to ${activeContact.alias}...` : 'Select or forge a whisper channel first...'}
               value={replyText}
+              disabled={!activeContact}
               onChange={(e) => setReplyText(e.target.value)}
               style={{
                 flex: 1,
@@ -493,6 +520,7 @@ export const FloatingOverlayHUD: React.FC = () => {
               variant="solid"
               size="md"
               type="submit"
+              disabled={!activeContact || !replyText.trim()}
               icon={<IconBladeSend size={13} color="#000" />}
               style={{ height: '38px', minHeight: '38px', padding: '0 14px' }}
             >

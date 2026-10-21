@@ -16,8 +16,8 @@ import { RelayModal } from '@/components/settings/RelayModal';
 import { SeedBackupModal } from '@/components/settings/SeedBackupModal';
 import { ThemeSwitcherModal } from '@/components/settings/ThemeSwitcherModal';
 import { SplashOnboarding } from '@/components/auth/SplashOnboarding';
-import { DesignShowcase } from '@/components/design-system/DesignShowcase';
 import { DesktopLayout } from '@/components/desktop/DesktopLayout';
+import { purgeLegacyDemoData } from '@/core/storage/db';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { useOverlayStore } from '@/stores/useOverlayStore';
 
@@ -27,15 +27,6 @@ export const App: React.FC = () => {
   const { initTheme } = useThemeStore();
   const { init: initP2P, roomState } = useP2PStore();
   const { toggleOverlay } = useOverlayStore();
-
-  const [isDesignRoute, setIsDesignRoute] = useState(() => {
-    return (
-      typeof window !== 'undefined' &&
-      (window.location.pathname === '/design' ||
-        window.location.hash === '#design' ||
-        window.location.search.includes('design'))
-    );
-  });
 
   const [activePubkey, setActivePubkey] = useState<string | undefined>();
   const [activeGroupId, setActiveGroupId] = useState<string | undefined>();
@@ -91,27 +82,13 @@ export const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    const handleUrlChange = () => {
-      setIsDesignRoute(
-        window.location.pathname === '/design' ||
-        window.location.hash === '#design' ||
-        window.location.search.includes('design')
-      );
-    };
-    window.addEventListener('popstate', handleUrlChange);
-    window.addEventListener('hashchange', handleUrlChange);
-    return () => {
-      window.removeEventListener('popstate', handleUrlChange);
-      window.removeEventListener('hashchange', handleUrlChange);
-    };
-  }, []);
 
   useEffect(() => {
     init();
     initTheme();
     loadRelays();
     initP2P();
+    purgeLegacyDemoData();
 
     // Outbox background retry interval
     const retryTimer = setInterval(() => {
@@ -142,17 +119,6 @@ export const App: React.FC = () => {
     }
   }, [roomState.code, activePubkey, activeGroupId]);
 
-  if (isDesignRoute) {
-    return (
-      <DesignShowcase
-        onExit={() => {
-          window.location.hash = '';
-          window.history.pushState(null, '', '/');
-          setIsDesignRoute(false);
-        }}
-      />
-    );
-  }
 
   if (!isInitialized) {
     return (
@@ -168,27 +134,6 @@ export const App: React.FC = () => {
     return (
       <div style={{ width: '100%', height: '100%', position: 'relative' }}>
         <SplashOnboarding />
-        {/* Quick link to Design Showcase during development */}
-        <button
-          onClick={() => setIsDesignRoute(true)}
-          style={{
-            position: 'absolute',
-            bottom: '16px',
-            right: '16px',
-            background: 'var(--void-2)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: '#ffffff',
-            padding: '6px 12px',
-            fontFamily: 'var(--font-display)',
-            fontSize: '10px',
-            letterSpacing: '0.2em',
-            cursor: 'pointer',
-            zIndex: 9999,
-            borderRadius: '2px',
-          }}
-        >
-          ⚔ DESIGN SHOWCASE (/design)
-        </button>
       </div>
     );
   }
@@ -286,29 +231,6 @@ export const App: React.FC = () => {
       {showSeed && <SeedBackupModal onClose={() => setShowSeed(false)} />}
       {showThemes && <ThemeSwitcherModal onClose={() => setShowThemes(false)} />}
 
-      {/* Quick link to /design showcase */}
-      <button
-        onClick={() => setIsDesignRoute(true)}
-        style={{
-          position: 'fixed',
-          bottom: '12px',
-          right: '12px',
-          background: 'var(--void-3)',
-          border: '1px solid rgba(255, 255, 255, 0.35)',
-          color: '#ffffff',
-          padding: '6px 12px',
-          fontFamily: 'var(--font-display)',
-          fontSize: '10px',
-          letterSpacing: '0.2em',
-          cursor: 'pointer',
-          zIndex: 9999,
-          borderRadius: '2px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.8)',
-        }}
-        title="Open Zenyth Design Showcase"
-      >
-        ⚔ /design
-      </button>
     </div>
   );
 };

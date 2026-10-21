@@ -20,7 +20,7 @@ export async function initializeRelays(): Promise<RelayConfig[]> {
       isEnabled: true,
       status: 'disconnected',
     }));
-    await db.relays.bulkAdd(defaults);
+    await db.relays.bulkPut(defaults);
     return defaults;
   }
   return existing;

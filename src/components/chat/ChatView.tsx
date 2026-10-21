@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/core/storage/db';
 import { sendDirectMessage } from '@/core/nostr/messageSender';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { MockService } from '@/services/mockDataService';
 import { MessageBubble } from '@/components/design-system/MessageBubble';
 import { VoiceWaveformRazor } from '@/components/design-system/VoiceWaveformRazor';
 import { ChromeButton } from '@/components/design-system/ChromeButton';
@@ -27,21 +26,17 @@ interface ChatViewProps {
 export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => {
   const { identity } = useAuthStore();
 
-  // Load contact from DB or MockService
-  const contact = useLiveQuery(async () => {
-    const c = await db.contacts.get(contactPubkey);
-    if (c) return c;
-    return MockService.getContacts().find((item) => item.pubkey === contactPubkey);
-  }, [contactPubkey]) ?? MockService.getContacts().find((item) => item.pubkey === contactPubkey);
+  // Load contact dynamically from DB
+  const contact = useLiveQuery(
+    () => db.contacts.get(contactPubkey),
+    [contactPubkey]
+  );
 
-  // Load messages from DB, falling back to MockService
-  const dbMessages = useLiveQuery(
+  // Load messages dynamically from DB
+  const messages = useLiveQuery(
     () => db.messages.where('conversationId').equals(contactPubkey).sortBy('timestamp'),
     [contactPubkey]
   ) ?? [];
-
-  const mockMessages = MockService.getDirectMessages(contactPubkey);
-  const messages = dbMessages.length > 0 ? dbMessages : mockMessages;
 
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -49,14 +44,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
   const [showVoiceNote, setShowVoiceNote] = useState(false);
   const [disappearingTimer, setDisappearingTimer] = useState<'off' | '1h' | '24h' | '7d'>('24h');
   const [replyTarget, setReplyTarget] = useState<{ senderName: string; content: string } | null>(null);
-  const [typingState, setTypingState] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, typingState]);
+  }, [messages]);
 
   // Reset unread count when opening
   useEffect(() => {
@@ -76,26 +70,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
 
     try {
       await sendDirectMessage(contactPubkey, text);
-      // Also update mock service state for immediate feedback
-      MockService.sendDirectMessage(contactPubkey, text);
-    } catch {
-      MockService.sendDirectMessage(contactPubkey, text);
+    } catch (err) {
+      console.error('Failed to dispatch message:', err);
     } finally {
       setIsSending(false);
       setReplyTarget(null);
-
-      // Simulate peer response after 2.5s for authentic feeling
-      setTimeout(() => {
-        setTypingState(true);
-        setTimeout(() => {
-          setTypingState(false);
-          MockService.sendDirectMessage(
-            contactPubkey,
-            'Cryptographic transmission verified. The channel remains silent.'
-          );
-          SoundEngine.playBladeTick();
-        }, 2200);
-      }, 1200);
     }
   };
 
@@ -317,29 +296,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ contactPubkey, onBack }) => 
         {showVoiceNote && (
           <div style={{ alignSelf: 'flex-start', margin: '4px 0' }}>
             <VoiceWaveformRazor durationSeconds={28} />
-          </div>
-        )}
-
-        {/* Peer Typing Indicator */}
-        {typingState && (
-          <div
-            className="anim-slice-in"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 10px',
-              background: 'var(--void-1)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '2px',
-              maxWidth: '220px',
-              margin: '4px 0',
-            }}
-          >
-            <div style={{ width: '4px', height: '4px', background: '#ffffff', transform: 'rotate(45deg)' }} />
-            <span style={{ fontSize: '11px', color: 'var(--text-silver)', fontFamily: 'var(--font-mono)' }}>
-              {contact.alias} is sealing whisper...
-            </span>
           </div>
         )}
 

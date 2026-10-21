@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/core/storage/db';
+import { Contact, GroupChat } from '@/types';
 import { ConversationList } from '@/components/chat/ConversationList';
 import { ChatView } from '@/components/chat/ChatView';
 import { GroupChatView } from '@/components/groups/GroupChatView';
@@ -15,7 +18,8 @@ import {
   IconCopyBlade,
   IconChevron,
 } from '@/components/icons/RazorIcons';
-import { MockService, MOCK_USER, MOCK_CONTACTS } from '@/services/mockDataService';
+import { GroupManager } from '@/core/groups/groupManager';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { SoundEngine } from '@/core/feedback/soundEffects';
 
 interface DesktopLayoutProps {
@@ -42,38 +46,49 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
   onOpenRelays,
   onOpenCommandPalette,
 }) => {
-  const [epochOverride, setEpochOverride] = useState<number | null>(null);
+  const { identity } = useAuthStore();
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  const selectedContact = activePubkey
-    ? MockService.getContacts().find((c) => c.pubkey === activePubkey)
-    : undefined;
+  const selectedContact = useLiveQuery<Contact | undefined>(
+    async () => {
+      if (!activePubkey) return undefined;
+      return db.contacts.get(activePubkey);
+    },
+    [activePubkey]
+  );
 
-  const rawGroup = activeGroupId
-    ? MockService.getGroups().find((g) => g.id === activeGroupId)
-    : undefined;
+  const selectedGroup = useLiveQuery<GroupChat | undefined>(
+    async () => {
+      if (!activeGroupId) return undefined;
+      return db.groups.get(activeGroupId);
+    },
+    [activeGroupId]
+  );
 
-  const selectedGroup = rawGroup
-    ? {
-        ...rawGroup,
-        currentEpoch: epochOverride ?? rawGroup.currentEpoch,
-      }
-    : undefined;
+  const memberContacts = useLiveQuery<Contact[]>(
+    async () => {
+      if (!selectedGroup?.members?.length) return [];
+      return db.contacts.where('pubkey').anyOf(selectedGroup.members).toArray();
+    },
+    [selectedGroup?.members]
+  ) ?? [];
 
-  const handleRekeyGroup = () => {
+  const handleRekeyGroup = async () => {
     if (!selectedGroup) return;
     SoundEngine.playSealChime();
-    const nextEpoch = (selectedGroup.currentEpoch || 1) + 1;
-    setEpochOverride(nextEpoch);
-    selectedGroup.currentEpoch = nextEpoch;
-    setActionStatus(`Epoch ${nextEpoch} ratchet key generated.`);
+    try {
+      await GroupManager.rotateGroupKey(selectedGroup.id);
+      setActionStatus(`Epoch ${selectedGroup.currentEpoch + 1} ratchet key generated.`);
+    } catch (err: any) {
+      setActionStatus(err?.message || 'Key rotation failed');
+    }
     setTimeout(() => setActionStatus(null), 3000);
   };
 
   const handleSignalBeacon = () => {
     SoundEngine.playBladeTick();
-    setActionStatus('Cryptographic beacon signaled across 5/5 relays.');
+    setActionStatus('Cryptographic beacon signaled across connected relays.');
     setTimeout(() => setActionStatus(null), 3000);
   };
 
@@ -90,41 +105,34 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
     setTimeout(() => setCopiedKey(false), 2000);
   };
 
-  // Build warrior roster for group
+  // Build warrior roster dynamically from sanctum members
   const warriors = selectedGroup
     ? [
-        {
-          pubkey: MOCK_USER.pubkey,
-          alias: `${MOCK_USER.displayName} (YOU)`,
-          tag: MOCK_USER.tag,
-          role: 'SANCTUM MASTER',
-          ping: 'HOST',
-          isSelf: true,
-        },
-        {
-          pubkey: MOCK_CONTACTS[0].pubkey,
-          alias: MOCK_CONTACTS[0].alias,
-          tag: MOCK_CONTACTS[0].tag,
-          role: 'VANGUARD',
-          ping: '12ms',
-          isSelf: false,
-        },
-        {
-          pubkey: MOCK_CONTACTS[1].pubkey,
-          alias: MOCK_CONTACTS[1].alias,
-          tag: MOCK_CONTACTS[1].tag,
-          role: 'OPERATIVE',
-          ping: '19ms',
-          isSelf: false,
-        },
-        {
-          pubkey: MOCK_CONTACTS[2].pubkey,
-          alias: MOCK_CONTACTS[2].alias,
-          tag: MOCK_CONTACTS[2].tag,
-          role: 'SCOUT',
-          ping: '34ms',
-          isSelf: false,
-        },
+        ...(identity
+          ? [
+              {
+                pubkey: identity.pubkey,
+                alias: `${identity.displayName} (YOU)`,
+                tag: identity.tag,
+                role: selectedGroup.adminPubkey === identity.pubkey ? 'SANCTUM MASTER' : 'WARRIOR',
+                ping: 'HOST',
+                isSelf: true,
+              },
+            ]
+          : []),
+        ...(selectedGroup.members || [])
+          .filter((pk: string) => pk !== identity?.pubkey)
+          .map((pk: string) => {
+            const c = memberContacts.find((mc) => mc.pubkey === pk);
+            return {
+              pubkey: pk,
+              alias: c?.alias || `OPERATIVE#${pk.slice(0, 4)}`,
+              tag: c?.tag || `#${pk.slice(0, 4)}`,
+              role: selectedGroup.adminPubkey === pk ? 'SANCTUM MASTER' : 'OPERATIVE',
+              ping: 'VERIFIED',
+              isSelf: false,
+            };
+          }),
       ]
     : [];
 

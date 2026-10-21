@@ -271,3 +271,23 @@ body, html {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =========================================================================
+   RESPONSIVE MOBILE RULES
+   ========================================================================= */
+@media (max-width: 768px) {
+  body, html, #root {
+    width: 100vw;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  header {
+    max-width: calc(100vw - 12px);
+  }
+
+  .tracked-micro {
+    letter-spacing: 0.18em;
+  }
+}
+

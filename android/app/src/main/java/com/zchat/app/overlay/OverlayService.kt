@@ -39,6 +39,8 @@ class OverlayService : Service() {
         const val EXTRA_BADGE_COUNT = "extra_badge_count"
         const val EXTRA_CHANNEL_TITLE = "extra_channel_title"
         const val EXTRA_MESSAGES_JSON = "extra_messages_json"
+        const val EXTRA_ACTIVE_PUBKEY = "extra_active_pubkey"
+        const val EXTRA_CONTACTS_JSON = "extra_contacts_json"
     }
 
     private var windowManager: WindowManager? = null
@@ -64,9 +66,11 @@ class OverlayService : Service() {
             ACTION_SHOW -> {
                 val opacity = intent.getIntExtra(EXTRA_OPACITY, 85)
                 val clickThrough = intent.getBooleanExtra(EXTRA_CLICK_THROUGH, false)
-                val title = intent.getStringExtra(EXTRA_CHANNEL_TITLE) ?: "ZENYTH HUD"
+                val title = intent.getStringExtra(EXTRA_CHANNEL_TITLE) ?: "ZENYTH"
                 val messagesJson = intent.getStringExtra(EXTRA_MESSAGES_JSON) ?: "[]"
-                attachBubbleView(opacity, clickThrough, title, messagesJson)
+                val activePubkey = intent.getStringExtra(EXTRA_ACTIVE_PUBKEY) ?: ""
+                val contactsJson = intent.getStringExtra(EXTRA_CONTACTS_JSON) ?: "[]"
+                attachBubbleView(opacity, clickThrough, title, messagesJson, activePubkey, contactsJson)
             }
             ACTION_HIDE -> {
                 detachBubbleView()
@@ -93,7 +97,9 @@ class OverlayService : Service() {
             ACTION_UPDATE_CHAT -> {
                 val title = intent.getStringExtra(EXTRA_CHANNEL_TITLE) ?: ""
                 val messagesJson = intent.getStringExtra(EXTRA_MESSAGES_JSON) ?: "[]"
-                bubbleView?.updateChatData(title, messagesJson)
+                val activePubkey = intent.getStringExtra(EXTRA_ACTIVE_PUBKEY) ?: ""
+                val contactsJson = intent.getStringExtra(EXTRA_CONTACTS_JSON) ?: "[]"
+                bubbleView?.updateChatData(title, messagesJson, activePubkey, contactsJson)
             }
         }
         return START_STICKY
@@ -103,11 +109,13 @@ class OverlayService : Service() {
         initialOpacity: Int,
         initialClickThrough: Boolean,
         initialTitle: String,
-        initialMessagesJson: String
+        initialMessagesJson: String,
+        initialActivePubkey: String = "",
+        initialContactsJson: String = "[]"
     ) {
         if (isViewAttached) {
             bubbleView?.setOpacity(initialOpacity)
-            bubbleView?.updateChatData(initialTitle, initialMessagesJson)
+            bubbleView?.updateChatData(initialTitle, initialMessagesJson, initialActivePubkey, initialContactsJson)
             if (initialClickThrough != isCurrentPassThrough) {
                 handleSetClickThrough(initialClickThrough)
             }
@@ -130,7 +138,7 @@ class OverlayService : Service() {
             layoutFlags,
             PixelFormat.TRANSLUCENT
         ).apply {
-            alpha = 1.0f // Entire window stays 100% solid; ghost effect is background-only
+            alpha = 1.0f // Surface is 100% solid; ghost effect is background-only
         }
 
         bubbleView = FloatingBubbleView(
@@ -139,6 +147,9 @@ class OverlayService : Service() {
             layoutParams = params,
             onSendMessageListener = { text ->
                 ZChatOverlayPlugin.notifyMessageSent(text)
+            },
+            onSelectContactListener = { pubkey ->
+                ZChatOverlayPlugin.notifyContactSelected(pubkey)
             },
             onToggleClickThroughListener = { enabled ->
                 handleSetClickThrough(enabled)
@@ -153,7 +164,7 @@ class OverlayService : Service() {
             wm.addView(bubbleView, params)
             isViewAttached = true
             bubbleView?.setOpacity(initialOpacity)
-            bubbleView?.updateChatData(initialTitle, initialMessagesJson)
+            bubbleView?.updateChatData(initialTitle, initialMessagesJson, initialActivePubkey, initialContactsJson)
             if (initialClickThrough) {
                 handleSetClickThrough(true)
             }
@@ -179,7 +190,6 @@ class OverlayService : Service() {
 
     // =========================================================================
     // PASS-THROUGH HANDLER & TOUCH RESTORATION
-    // Solves the touch trap by rendering an independent touchable pill & notification action
     // =========================================================================
     private fun handleSetClickThrough(enabled: Boolean) {
         isCurrentPassThrough = enabled
@@ -205,7 +215,7 @@ class OverlayService : Service() {
             gravity = Gravity.CENTER_VERTICAL
             val bg = GradientDrawable().apply {
                 cornerRadius = 16f * density
-                setColor(Color.parseColor("#F59E0B")) // Amber neon
+                setColor(Color.parseColor("#F59E0B")) // Amber warning badge
                 setStroke((1.5f * density).toInt(), Color.WHITE)
             }
             background = bg
@@ -233,8 +243,6 @@ class OverlayService : Service() {
 
         touchRestorePillView = pillLayout
 
-        // CRITICAL: This window has FLAG_NOT_FOCUSABLE, but NOT FLAG_NOT_TOUCHABLE.
-        // So the user can always tap this pill at the top of the screen to regain touch!
         val pillParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -293,7 +301,7 @@ class OverlayService : Service() {
         )
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("zChat Gamer HUD Active")
+            .setContentTitle("zChat HUD Active")
             .setContentText(
                 if (isPassThru) "Pass-Through active (touches pass to game)" else "Always-on-top HUD running"
             )
@@ -302,7 +310,6 @@ class OverlayService : Service() {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
 
-        // If in Pass-Through mode, provide an action button directly in notification drawer to restore touch
         if (isPassThru) {
             val restoreIntent = Intent(this, OverlayService::class.java).apply {
                 action = ACTION_SET_CLICK_THROUGH

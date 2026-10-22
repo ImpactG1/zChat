@@ -28,6 +28,15 @@ class ZChatOverlayPlugin : Plugin() {
             }
         }
 
+        fun notifyContactSelected(pubkey: String) {
+            instance?.let { plugin ->
+                val ret = JSObject().apply {
+                    put("pubkey", pubkey)
+                }
+                plugin.notifyListeners("overlaySelectContact", ret)
+            }
+        }
+
         fun notifyOverlayClosed() {
             isOverlayActive = false
             instance?.let { plugin ->
@@ -146,11 +155,15 @@ class ZChatOverlayPlugin : Plugin() {
     fun updateChatMessages(call: PluginCall) {
         val title = call.getString("channelTitle", "") ?: ""
         val messagesJson = call.getString("messagesJson", "[]") ?: "[]"
+        val activePubkey = call.getString("activePubkey", "") ?: ""
+        val contactsJson = call.getString("contactsJson", "[]") ?: "[]"
 
         val intent = Intent(context, OverlayService::class.java).apply {
             action = OverlayService.ACTION_UPDATE_CHAT
             putExtra(OverlayService.EXTRA_CHANNEL_TITLE, title)
             putExtra(OverlayService.EXTRA_MESSAGES_JSON, messagesJson)
+            putExtra(OverlayService.EXTRA_ACTIVE_PUBKEY, activePubkey)
+            putExtra(OverlayService.EXTRA_CONTACTS_JSON, contactsJson)
         }
         context.startService(intent)
 

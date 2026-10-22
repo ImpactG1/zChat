@@ -13,7 +13,7 @@ import {
 } from '@/components/icons/RazorIcons';
 import { SoundEngine } from '@/core/feedback/soundEffects';
 
-export type OverlayMode = 'minimized' | 'maximized';
+export type OverlayWindowMode = 'minimized' | 'maximized';
 
 export const FloatingOverlayHUD: React.FC = () => {
   const {
@@ -22,13 +22,17 @@ export const FloatingOverlayHUD: React.FC = () => {
     setOpacity,
     isClickThrough,
     toggleClickThrough,
-    toggleOverlay,
+    activeConversationId,
+    setActiveConversation,
   } = useOverlayStore();
 
-  // 2 Distinct States: Minimized (floating bubble) and Maximized (full HUD)
-  const [mode, setMode] = useState<OverlayMode>('maximized');
+  // Bubble form vs Window form (clicking "✕" converts window back to Bubble form)
+  const [isBubbleForm, setIsBubbleForm] = useState(false);
 
-  // Minimized Bubble Position (Edge-snapping)
+  // 2 Window Modes: Minimized (scaled-down chat-only) and Maximized (larger with chat switcher)
+  const [windowMode, setWindowMode] = useState<OverlayWindowMode>('minimized');
+
+  // Bubble Position (Edge-snapping)
   const [bubblePos, setBubblePos] = useState(() => ({
     x: typeof window !== 'undefined' ? Math.max(20, window.innerWidth - 80) : 320,
     y: 160,
@@ -36,58 +40,73 @@ export const FloatingOverlayHUD: React.FC = () => {
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
   const bubbleDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
 
-  // Maximized HUD Window Geometry
+  // Window Geometry
+  // Minimized size: 340px x 360px
+  // Maximized size: 480px x 540px
   const [panelPos, setPanelPos] = useState({ x: 32, y: 56 });
-  const [panelSize, setPanelSize] = useState({ width: 380, height: 480 });
+  const [maximizedSize, setMaximizedSize] = useState({ width: 480, height: 540 });
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
   const panelDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const panelResizeStartRef = useRef({ startX: 0, startY: 0, initW: 0, initH: 0 });
 
-  // Messages Scroll Ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Dynamically query latest active contact or group
-  const activeContact = useLiveQuery<Contact | undefined>(
-    () => db.contacts.orderBy('lastTimestamp').reverse().first()
-  );
+  // Live queries for contacts and groups
+  const allContacts = useLiveQuery<Contact[]>(() => db.contacts.orderBy('lastTimestamp').reverse().toArray()) ?? [];
+  const allGroups = useLiveQuery<GroupChat[]>(() => db.groups.orderBy('lastTimestamp').reverse().toArray()) ?? [];
 
-  const activeGroup = useLiveQuery<GroupChat | undefined>(
-    () => db.groups.orderBy('lastTimestamp').reverse().first()
-  );
+  // Determine unified conversation list
+  const conversationList = [
+    ...allGroups.map((g) => ({
+      pubkey: g.id,
+      alias: g.name || 'Sanctum Squad',
+      unreadCount: g.unreadCount || 0,
+      lastTimestamp: g.lastTimestamp || 0,
+      isGroup: true,
+    })),
+    ...allContacts.map((c) => ({
+      pubkey: c.pubkey,
+      alias: c.alias || `User#${c.pubkey.slice(0, 4)}`,
+      unreadCount: c.unreadCount || 0,
+      lastTimestamp: c.lastTimestamp || 0,
+      isGroup: false,
+    })),
+  ].sort((a, b) => b.lastTimestamp - a.lastTimestamp);
 
-  const isGroupActive = Boolean(
-    activeGroup && (!activeContact || (activeGroup.lastTimestamp || 0) > (activeContact.lastTimestamp || 0))
-  );
+  // Determine active conversation
+  const activeItem = conversationList.find((c) => c.pubkey === activeConversationId) || conversationList[0];
+  const activePubkey = activeItem?.pubkey;
+  const isGroupActive = Boolean(activeItem?.isGroup);
 
-  // Dynamically query messages
+  // Dynamically query messages for active item
   const directMessages = useLiveQuery<ChatMessage[]>(
     async () => {
-      if (!activeContact?.pubkey) return [];
-      return db.messages.where('conversationId').equals(activeContact.pubkey).sortBy('timestamp');
+      if (!activePubkey || isGroupActive) return [];
+      return db.messages.where('conversationId').equals(activePubkey).sortBy('timestamp');
     },
-    [activeContact?.pubkey]
+    [activePubkey, isGroupActive]
   ) ?? [];
 
   const groupMessages = useLiveQuery<GroupMessage[]>(
     async () => {
-      if (!activeGroup?.id) return [];
-      return db.groupMessages.where('groupId').equals(activeGroup.id).sortBy('timestamp');
+      if (!activePubkey || !isGroupActive) return [];
+      return db.groupMessages.where('groupId').equals(activePubkey).sortBy('timestamp');
     },
-    [activeGroup?.id]
+    [activePubkey, isGroupActive]
   ) ?? [];
 
   const [replyText, setReplyText] = useState('');
 
-  // Auto-scroll to bottom when messages update
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [directMessages.length, groupMessages.length]);
+  }, [directMessages.length, groupMessages.length, activePubkey]);
 
   if (!isEnabled) return null;
 
   // =========================================================================
-  // 1. BUBBLE DRAG HANDLERS (MINIMIZED STATE)
+  // 1. BUBBLE DRAG & CLICK HANDLERS
   // =========================================================================
   const handleBubblePointerDown = (e: React.PointerEvent) => {
     setIsDraggingBubble(true);
@@ -122,7 +141,7 @@ export const FloatingOverlayHUD: React.FC = () => {
   };
 
   // =========================================================================
-  // 2. PANEL DRAG & RESIZE HANDLERS (MAXIMIZED STATE)
+  // 2. PANEL DRAG & RESIZE HANDLERS
   // =========================================================================
   const handlePanelDragStart = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -160,8 +179,8 @@ export const FloatingOverlayHUD: React.FC = () => {
     panelResizeStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      initW: panelSize.width,
-      initH: panelSize.height,
+      initW: maximizedSize.width,
+      initH: maximizedSize.height,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -170,11 +189,11 @@ export const FloatingOverlayHUD: React.FC = () => {
     if (!isResizingPanel) return;
     const dw = e.clientX - panelResizeStartRef.current.startX;
     const dh = e.clientY - panelResizeStartRef.current.startY;
-    const maxW = Math.max(300, window.innerWidth - panelPos.x - 10);
-    const maxH = Math.max(260, window.innerHeight - panelPos.y - 10);
-    setPanelSize({
-      width: Math.max(300, Math.min(maxW, panelResizeStartRef.current.initW + dw)),
-      height: Math.max(260, Math.min(maxH, panelResizeStartRef.current.initH + dh)),
+    const maxW = Math.max(340, window.innerWidth - panelPos.x - 10);
+    const maxH = Math.max(300, window.innerHeight - panelPos.y - 10);
+    setMaximizedSize({
+      width: Math.max(340, Math.min(maxW, panelResizeStartRef.current.initW + dw)),
+      height: Math.max(300, Math.min(maxH, panelResizeStartRef.current.initH + dh)),
     });
   };
 
@@ -188,23 +207,26 @@ export const FloatingOverlayHUD: React.FC = () => {
 
   const handleSendQuickReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim() || !activeContact) return;
+    if (!replyText.trim() || !activePubkey) return;
     SoundEngine.playBladeTick();
     const text = replyText.trim();
     setReplyText('');
     try {
-      await sendDirectMessage(activeContact.pubkey, text);
+      if (!isGroupActive) {
+        await sendDirectMessage(activePubkey, text);
+      }
     } catch (err) {
       console.error('Failed to send overlay reply:', err);
     }
   };
 
   const hudOpacityValue = opacity / 100;
-  const channelDisplayTitle = isGroupActive
-    ? (activeGroup?.name ? `SANCTUM // ${activeGroup.name.toUpperCase()}` : 'SANCTUM SQUAD')
-    : (activeContact ? activeContact.alias.toUpperCase() : 'ZENYTH HUD');
+  const totalUnreadCount = conversationList.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+  const activeTitle = activeItem ? activeItem.alias.toUpperCase() : 'ZENYTH';
 
-  const unreadBadgeCount = (activeContact?.unreadCount || 0) + (activeGroup?.unreadCount || 0);
+  // Dimensions based on mode
+  const currentWidth = windowMode === 'maximized' ? maximizedSize.width : 340;
+  const currentHeight = windowMode === 'maximized' ? maximizedSize.height : 360;
 
   return (
     <div
@@ -216,9 +238,9 @@ export const FloatingOverlayHUD: React.FC = () => {
       }}
     >
       {/* ================================================================= */}
-      {/* 1. STATE 1: MINIMIZED FLOATING BUBBLE                             */}
+      {/* 1. BUBBLE FORM (When collapsed)                                   */}
       {/* ================================================================= */}
-      {mode === 'minimized' && (
+      {isBubbleForm && (
         <div
           onPointerDown={handleBubblePointerDown}
           onPointerMove={handleBubblePointerMove}
@@ -226,19 +248,19 @@ export const FloatingOverlayHUD: React.FC = () => {
           onClick={() => {
             if (!isDraggingBubble) {
               SoundEngine.playBladeTick();
-              setMode('maximized');
+              setIsBubbleForm(false);
             }
           }}
           style={{
             position: 'fixed',
             left: `${bubblePos.x}px`,
             top: `${bubblePos.y}px`,
-            width: '58px',
-            height: '58px',
+            width: '56px',
+            height: '56px',
             background: 'var(--void-1)',
-            borderRadius: '50%',
-            border: '2px solid #00F0FF',
-            boxShadow: '0 0 20px rgba(0, 240, 255, 0.4), 0 8px 24px rgba(0, 0, 0, 0.85)',
+            border: '1.5px solid rgba(255, 255, 255, 0.45)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.85)',
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
             cursor: isDraggingBubble ? 'grabbing' : 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -247,63 +269,67 @@ export const FloatingOverlayHUD: React.FC = () => {
             pointerEvents: 'auto',
             transition: isDraggingBubble ? 'none' : 'transform var(--transition-fast)',
           }}
-          title="Zenyth HUD Sigil (Click to maximize chat)"
+          title="Zenyth HUD Sigil (Click to open chat)"
         >
           <EmblemLogo size={42} />
 
           {/* Unread Stack Badge */}
-          {unreadBadgeCount > 0 && (
+          {totalUnreadCount > 0 && (
             <div
               style={{
                 position: 'absolute',
                 top: '-4px',
                 right: '-4px',
-                minWidth: '18px',
-                height: '18px',
-                padding: '0 4px',
-                background: '#F43F5E',
-                color: '#ffffff',
-                borderRadius: '9px',
+                minWidth: '16px',
+                height: '16px',
+                padding: '0 3px',
+                background: '#ffffff',
+                color: '#000000',
+                borderRadius: '2px',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
+                fontSize: '9px',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 10px rgba(244, 63, 94, 0.9)',
+                boxShadow: '0 0 8px rgba(255, 255, 255, 0.9)',
               }}
             >
-              {unreadBadgeCount > 99 ? '99+' : unreadBadgeCount}
+              {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
             </div>
           )}
         </div>
       )}
 
       {/* ================================================================= */}
-      {/* 2. STATE 2: MAXIMIZED GAMER HUD PANEL                             */}
+      {/* 2. WINDOW FORM (Void Aesthetics)                                  */}
+      {/* Mode 1: MINIMIZED (Scaled-down chat only)                         */}
+      {/* Mode 2: MAXIMIZED (Maximized window with chat switcher)           */}
+      {/* Clicking "✕" converts back to Bubble form                         */}
       {/* ================================================================= */}
-      {mode === 'maximized' && (
+      {!isBubbleForm && (
         <div
           className="anim-slice-in"
           style={{
             position: 'fixed',
             left: `${panelPos.x}px`,
             top: `${panelPos.y}px`,
-            width: `${panelSize.width}px`,
-            height: `${panelSize.height}px`,
+            width: `${currentWidth}px`,
+            height: `${currentHeight}px`,
             // GHOST MODE: Only the chat background becomes transparent (0% - 100%)
-            background: `rgba(8, 10, 15, ${hudOpacityValue})`,
-            backdropFilter: opacity > 15 ? 'blur(16px)' : 'none',
-            border: `1.5px solid rgba(0, 240, 255, ${Math.max(0.2, hudOpacityValue)})`,
-            borderRadius: '12px',
+            background: `rgba(5, 6, 8, ${hudOpacityValue})`,
+            backdropFilter: opacity > 0 ? 'blur(16px)' : 'none',
+            border: '1px solid rgba(255, 255, 255, 0.28)',
+            clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
             boxShadow: '0 12px 48px rgba(0, 0, 0, 0.95)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
             pointerEvents: isClickThrough ? 'none' : 'auto',
+            transition: isDraggingPanel || isResizingPanel ? 'none' : 'width 0.2s ease, height 0.2s ease',
           }}
         >
-          {/* Tactical Recoverable Touch Pill (Always interactive even in Pass-Through mode) */}
+          {/* Tactical Recoverable Touch Pill (Always interactive in pass-thru mode) */}
           {isClickThrough && (
             <button
               onClick={(e) => {
@@ -313,23 +339,23 @@ export const FloatingOverlayHUD: React.FC = () => {
               }}
               style={{
                 position: 'absolute',
-                top: '8px',
+                top: '6px',
                 right: '48px',
-                background: '#F59E0B',
+                background: 'rgba(245, 158, 11, 0.95)',
                 color: '#000000',
-                border: '1.5px solid #ffffff',
-                borderRadius: '14px',
-                padding: '4px 12px',
+                border: '1px solid #ffffff',
+                borderRadius: '2px',
+                padding: '4px 10px',
                 fontFamily: 'var(--font-mono)',
                 fontSize: '10px',
                 fontWeight: 800,
                 cursor: 'pointer',
                 pointerEvents: 'auto',
-                zIndex: 100005,
-                boxShadow: '0 0 20px rgba(245, 158, 11, 0.9)',
+                zIndex: 100001,
+                boxShadow: '0 0 16px rgba(245, 158, 11, 0.9)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
               }}
               title="Click here to restore touch control"
             >
@@ -344,26 +370,25 @@ export const FloatingOverlayHUD: React.FC = () => {
             onPointerMove={handlePanelDragMove}
             onPointerUp={handlePanelDragEnd}
             style={{
-              padding: '10px 14px',
+              padding: '8px 12px',
               borderBottom: '1px solid rgba(255, 255, 255, 0.16)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'rgba(12, 15, 22, 0.98)',
+              background: 'rgba(11, 13, 17, 0.98)',
               cursor: isDraggingPanel ? 'grabbing' : 'grab',
               userSelect: 'none',
               touchAction: 'none',
               pointerEvents: 'auto',
             }}
           >
-            {/* Header Sigil + Title */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <EmblemLogo size={22} />
+              <EmblemLogo size={20} />
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     fontFamily: 'var(--font-display)',
-                    fontSize: '12px',
+                    fontSize: '11.5px',
                     letterSpacing: '0.12em',
                     color: '#ffffff',
                     fontWeight: 700,
@@ -372,46 +397,36 @@ export const FloatingOverlayHUD: React.FC = () => {
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {channelDisplayTitle}
-                </div>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '9px',
-                    color: '#00F0FF',
-                    letterSpacing: '0.08em',
-                  }}
-                >
-                  ● P2P MESH ACTIVE
+                  {activeTitle}
                 </div>
               </div>
             </div>
 
             {/* Header Controls (All buttons have pointerEvents: 'auto') */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', pointerEvents: 'auto' }}>
-              {/* Ghost Mode Opacity Slider (0% to 100%) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', pointerEvents: 'auto' }}>
+              {/* Opacity Slider (0% to 100%) */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
-                  background: 'rgba(20, 25, 35, 0.95)',
-                  padding: '3px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  padding: '2px 6px',
+                  borderRadius: '2px',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
                 }}
                 title={`Ghost Mode Transparency: ${opacity}% (0% to 100%) - Only chat background fades!`}
               >
-                <IconGhostMode size={12} color="#8892B0" />
+                <IconGhostMode size={11} color="var(--text-silver)" />
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={opacity}
                   onChange={(e) => setOpacity(Number(e.target.value))}
-                  style={{ width: '48px', accentColor: '#00F0FF', cursor: 'pointer' }}
+                  style={{ width: '42px', accentColor: '#ffffff', cursor: 'pointer' }}
                 />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#ffffff', minWidth: '24px' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#ffffff' }}>
                   {opacity}%
                 </span>
               </div>
@@ -424,14 +439,14 @@ export const FloatingOverlayHUD: React.FC = () => {
                   toggleClickThrough();
                 }}
                 style={{
-                  padding: '4px 8px',
-                  background: isClickThrough ? 'rgba(245, 158, 11, 0.25)' : 'rgba(20, 25, 35, 0.95)',
-                  border: `1px solid ${isClickThrough ? '#F59E0B' : '#00F0FF'}`,
-                  color: isClickThrough ? '#F59E0B' : '#00F0FF',
+                  padding: '3px 6px',
+                  background: isClickThrough ? 'rgba(245, 158, 11, 0.25)' : 'var(--void-2)',
+                  border: `1px solid ${isClickThrough ? 'var(--status-warning)' : 'rgba(255, 255, 255, 0.22)'}`,
+                  color: isClickThrough ? 'var(--status-warning)' : 'var(--text-silver)',
                   fontSize: '9.5px',
                   fontFamily: 'var(--font-mono)',
                   cursor: 'pointer',
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
@@ -439,115 +454,179 @@ export const FloatingOverlayHUD: React.FC = () => {
                 }}
                 title={isClickThrough ? 'Pass-Through active (clicks pass through to game)' : 'Activate Pass-Through (clicks pass to underlying game)'}
               >
-                <IconClickThrough size={11} />
+                <IconClickThrough size={10} />
                 <span>{isClickThrough ? 'PASS-THRU' : 'TOUCH'}</span>
               </button>
 
-              {/* Minimize to Bubble Button ("MIN") */}
+              {/* Mode Toggle Button: MIN <-> MAX */}
               <button
                 onClick={() => {
                   SoundEngine.playBladeTick();
-                  setMode('minimized');
+                  setWindowMode((prev) => (prev === 'minimized' ? 'maximized' : 'minimized'));
                 }}
                 style={{
-                  background: 'rgba(26, 32, 44, 0.95)',
+                  background: 'var(--void-2)',
                   border: '1px solid rgba(255, 255, 255, 0.25)',
-                  color: '#CBD5E1',
+                  color: 'var(--text-silver)',
                   cursor: 'pointer',
-                  padding: '4px 8px',
+                  padding: '3px 6px',
                   fontSize: '9.5px',
                   fontFamily: 'var(--font-mono)',
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   fontWeight: 600,
                   pointerEvents: 'auto',
                 }}
-                title="Minimize to Floating Sigil Bubble"
+                title={windowMode === 'minimized' ? 'Maximize window and reveal chat switcher' : 'Minimize window to compact chat view'}
               >
-                MIN
+                {windowMode === 'minimized' ? 'MAX' : 'MIN'}
               </button>
 
-              {/* Close Overlay ("✕") */}
+              {/* "✕" Button -> Converts back to Bubble Form */}
               <button
                 onClick={() => {
                   SoundEngine.playBladeTick();
-                  toggleOverlay();
+                  setIsBubbleForm(true);
                 }}
                 style={{
-                  background: 'rgba(38, 20, 24, 0.95)',
-                  border: '1px solid rgba(244, 63, 94, 0.4)',
-                  color: '#F43F5E',
+                  background: 'var(--void-2)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  color: '#ffffff',
                   cursor: 'pointer',
-                  padding: '4px 8px',
+                  padding: '3px 7px',
                   fontSize: '11px',
-                  fontWeight: 'bold',
-                  borderRadius: '4px',
+                  fontFamily: 'var(--font-mono)',
+                  borderRadius: '2px',
                   pointerEvents: 'auto',
                 }}
-                title="Exit Overlay to Dashboard"
+                title="Convert to Floating Bubble"
               >
                 ✕
               </button>
             </div>
           </div>
 
-          {/* Messages Stream (Scrollable with solid, readable cards) */}
+          {/* Maximized Mode: Conversation Switcher Row */}
+          {/* Lets users switch chats with other people directly from HUD */}
+          {windowMode === 'maximized' && (
+            <div
+              style={{
+                padding: '6px 10px',
+                background: 'rgba(11, 13, 17, 0.98)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                display: 'flex',
+                gap: '6px',
+                overflowX: 'auto',
+                pointerEvents: 'auto',
+                scrollbarWidth: 'none',
+              }}
+            >
+              {conversationList.map((item) => {
+                const isSelected = item.pubkey === activePubkey;
+                return (
+                  <button
+                    key={item.pubkey}
+                    onClick={() => {
+                      SoundEngine.playBladeTick();
+                      setActiveConversation(item.pubkey);
+                    }}
+                    style={{
+                      background: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.08)',
+                      color: isSelected ? '#000000' : 'var(--text-silver)',
+                      border: `1px solid ${isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.16)'}`,
+                      borderRadius: '2px',
+                      padding: '3px 8px',
+                      fontSize: '9.5px',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: isSelected ? 700 : 500,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span>{item.alias.toUpperCase()}</span>
+                    {item.unreadCount > 0 && (
+                      <span
+                        style={{
+                          background: isSelected ? '#000000' : '#ffffff',
+                          color: isSelected ? '#ffffff' : '#000000',
+                          borderRadius: '2px',
+                          padding: '0 3px',
+                          fontSize: '8px',
+                          fontWeight: 800,
+                        }}
+                      >
+                        {item.unreadCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Messages Stream (Last 25 messages, solid text & readable cards) */}
           <div
             style={{
               flex: 1,
-              padding: '12px 14px',
+              padding: '10px 12px',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: '8px',
+              gap: '6px',
             }}
           >
             {isGroupActive && groupMessages.length > 0 ? (
-              groupMessages.slice(-20).map((msg) => (
+              groupMessages.slice(-25).map((msg) => (
                 <div
                   key={msg.id}
                   style={{
-                    padding: '8px 12px',
-                    background: msg.authorAlias === 'You' ? 'rgba(30, 39, 56, 0.92)' : 'rgba(19, 23, 34, 0.90)',
-                    border: `1px solid ${msg.authorAlias === 'You' ? '#00F0FF' : 'rgba(255, 255, 255, 0.18)'}`,
-                    borderRadius: '4px',
+                    padding: '7px 10px',
+                    background: msg.authorAlias === 'You' ? 'rgba(25, 30, 40, 0.92)' : 'rgba(14, 17, 23, 0.90)',
+                    border: '1px solid rgba(255, 255, 255, 0.16)',
+                    borderRadius: '2px',
                     fontSize: '12px',
                     color: '#ffffff',
                     alignSelf: msg.authorAlias === 'You' ? 'flex-end' : 'flex-start',
                     maxWidth: '85%',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
                   }}
                 >
-                  <div style={{ fontSize: '9.5px', color: msg.authorAlias === 'You' ? '#00F0FF' : '#94A3B8', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
+                  <div style={{ fontSize: '9px', color: 'var(--text-silver)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
                     {msg.authorAlias || msg.senderTag || 'Teammate'}
                   </div>
                   {msg.content}
                 </div>
               ))
-            ) : activeContact && directMessages.length > 0 ? (
-              directMessages.slice(-20).map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    padding: '8px 12px',
-                    background: msg.senderPubkey === activeContact.pubkey ? 'rgba(19, 23, 34, 0.90)' : 'rgba(30, 39, 56, 0.92)',
-                    border: `1px solid ${msg.senderPubkey === activeContact.pubkey ? 'rgba(255, 255, 255, 0.18)' : '#00F0FF'}`,
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    color: '#ffffff',
-                    alignSelf: msg.senderPubkey === activeContact.pubkey ? 'flex-start' : 'flex-end',
-                    maxWidth: '85%',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
-                  }}
-                >
-                  <div style={{ fontSize: '9.5px', color: msg.senderPubkey === activeContact.pubkey ? '#94A3B8' : '#00F0FF', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
-                    {msg.senderPubkey === activeContact.pubkey ? activeContact.alias : 'You'}
+            ) : directMessages.length > 0 ? (
+              directMessages.slice(-25).map((msg) => {
+                const isMe = msg.senderPubkey !== activePubkey;
+                return (
+                  <div
+                    key={msg.id}
+                    style={{
+                      padding: '7px 10px',
+                      background: isMe ? 'rgba(25, 30, 40, 0.92)' : 'rgba(14, 17, 23, 0.90)',
+                      border: '1px solid rgba(255, 255, 255, 0.16)',
+                      borderRadius: '2px',
+                      fontSize: '12px',
+                      color: '#ffffff',
+                      alignSelf: isMe ? 'flex-end' : 'flex-start',
+                      maxWidth: '85%',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    <div style={{ fontSize: '9px', color: 'var(--text-silver)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
+                      {isMe ? 'You' : activeTitle}
+                    </div>
+                    {msg.content}
                   </div>
-                  {msg.content}
-                </div>
-              ))
+                );
+              })
             ) : (
-              <div style={{ padding: '32px 16px', textAlign: 'center', color: '#64748B', fontSize: '11px', fontFamily: 'var(--font-mono)', background: 'rgba(12, 15, 22, 0.5)', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '4px' }}>
-                WAITING FOR SIGNALS // P2P MESH CONNECTED
+              <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-silver)', fontSize: '11px', fontFamily: 'var(--font-mono)', background: 'rgba(11, 13, 17, 0.5)', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '2px' }}>
+                NO TRANSMISSIONS YET
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -557,28 +636,28 @@ export const FloatingOverlayHUD: React.FC = () => {
           <form
             onSubmit={handleSendQuickReply}
             style={{
-              padding: '8px 12px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.16)',
+              padding: '8px 10px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.14)',
               display: 'flex',
               gap: '6px',
-              background: 'rgba(12, 15, 22, 0.98)',
+              background: 'rgba(11, 13, 17, 0.98)',
               pointerEvents: 'auto',
             }}
           >
             <input
               type="text"
-              placeholder={activeContact ? 'Quick callout...' : 'Select contact...'}
+              placeholder={activePubkey ? 'Whisper...' : 'Select contact...'}
               value={replyText}
-              disabled={!activeContact}
+              disabled={!activePubkey}
               onChange={(e) => setReplyText(e.target.value)}
               style={{
                 flex: 1,
-                background: 'rgba(4, 6, 9, 0.9)',
+                background: 'var(--void-0)',
                 border: '1px solid rgba(255, 255, 255, 0.22)',
                 color: '#ffffff',
                 fontSize: '12px',
-                padding: '7px 10px',
-                borderRadius: '4px',
+                padding: '6px 10px',
+                borderRadius: '2px',
                 outline: 'none',
               }}
             />
@@ -586,42 +665,44 @@ export const FloatingOverlayHUD: React.FC = () => {
               variant="solid"
               size="sm"
               type="submit"
-              disabled={!activeContact || !replyText.trim()}
+              disabled={!activePubkey || !replyText.trim()}
               icon={<IconBladeSend size={11} color="#000" />}
-              style={{ minHeight: '32px', padding: '0 12px', fontSize: '10px', background: '#00F0FF', color: '#000000', fontWeight: 'bold' }}
+              style={{ minHeight: '30px', padding: '0 10px', fontSize: '10px' }}
             >
               SEND
             </ChromeButton>
           </form>
 
-          {/* Tactical Resize Grip */}
-          <div
-            onPointerDown={handlePanelResizeStart}
-            onPointerMove={handlePanelResizeMove}
-            onPointerUp={handlePanelResizeEnd}
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              width: '16px',
-              height: '16px',
-              cursor: 'nwse-resize',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              touchAction: 'none',
-              pointerEvents: 'auto',
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderTopLeftRadius: '4px',
-              zIndex: 10,
-            }}
-            title="Drag to resize HUD window"
-          >
-            <svg width="8" height="8" viewBox="0 0 8 8">
-              <line x1="7" y1="1" x2="1" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-              <line x1="7" y1="4" x2="4" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-          </div>
+          {/* Tactical Resize Grip (Active in Maximized Mode) */}
+          {windowMode === 'maximized' && (
+            <div
+              onPointerDown={handlePanelResizeStart}
+              onPointerMove={handlePanelResizeMove}
+              onPointerUp={handlePanelResizeEnd}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                width: '16px',
+                height: '16px',
+                cursor: 'nwse-resize',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                touchAction: 'none',
+                pointerEvents: 'auto',
+                background: 'rgba(255, 255, 255, 0.08)',
+                borderTopLeftRadius: '3px',
+                zIndex: 10,
+              }}
+              title="Drag to resize HUD window"
+            >
+              <svg width="8" height="8" viewBox="0 0 8 8">
+                <line x1="7" y1="1" x2="1" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+                <line x1="7" y1="4" x2="4" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </div>
+          )}
         </div>
       )}
     </div>

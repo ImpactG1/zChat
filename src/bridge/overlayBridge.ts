@@ -25,12 +25,21 @@ export interface ZChatOverlayPlugin {
   setOpacity(options: { opacity: number }): Promise<{ success: boolean }>;
   setClickThrough(options: { enabled: boolean }): Promise<{ success: boolean }>;
   updateUnreadCount(options: { count: number }): Promise<{ success: boolean }>;
-  updateChatMessages(options: { channelTitle?: string; messagesJson: string }): Promise<{ success: boolean }>;
+  updateChatMessages(options: {
+    channelTitle?: string;
+    messagesJson: string;
+    activePubkey?: string;
+    contactsJson?: string;
+  }): Promise<{ success: boolean }>;
   checkOverlayPermission(): Promise<{ granted: boolean }>;
   requestOverlayPermission(): Promise<{ requested: boolean }>;
   addListener(
     eventName: 'overlaySendMessage',
     listenerFunc: (data: { text: string }) => void
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'overlaySelectContact',
+    listenerFunc: (data: { pubkey: string }) => void
   ): Promise<PluginListenerHandle>;
 }
 
@@ -188,14 +197,21 @@ export class OverlayBridge {
   }
 
   /**
-   * Updates the live messages and title inside the native floating overlay
+   * Updates the live messages, active conversation, contacts list, and title inside the native floating overlay
    */
-  public static async updateChatData(channelTitle: string, messagesJson: string): Promise<void> {
+  public static async updateChatData(
+    channelTitle: string,
+    messagesJson: string,
+    activePubkey?: string,
+    contactsJson?: string
+  ): Promise<void> {
     if (this.isNative) {
       try {
         await NativeOverlay.updateChatMessages({
           channelTitle,
           messagesJson,
+          activePubkey: activePubkey || '',
+          contactsJson: contactsJson || '[]',
         });
       } catch (err) {
         console.warn('Failed to update chat messages in overlay:', err);
@@ -222,6 +238,22 @@ export class OverlayBridge {
       });
     } catch (err) {
       console.warn('Failed to register overlaySendMessage listener:', err);
+    }
+  }
+
+  /**
+   * Listens for contact switches performed inside the Maximized overlay HUD
+   */
+  public static async initContactSelectListener(onSelectContact: (pubkey: string) => Promise<void>): Promise<void> {
+    if (!this.isNative) return;
+    try {
+      await NativeOverlay.addListener('overlaySelectContact', async (data) => {
+        if (data && data.pubkey) {
+          await onSelectContact(data.pubkey);
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to register overlaySelectContact listener:', err);
     }
   }
 }

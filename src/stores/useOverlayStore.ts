@@ -74,14 +74,23 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
       // Hook up message listener for replies sent from native floating overlay
       OverlayBridge.initMessageListener(async (text) => {
         try {
-          const contact = await db.contacts.orderBy('lastTimestamp').reverse().first();
+          const activeId = get().activeConversationId;
+          const contact = activeId
+            ? await db.contacts.get(activeId)
+            : await db.contacts.orderBy('lastTimestamp').reverse().first();
+
           if (contact) {
             await sendDirectMessage(contact.pubkey, text);
           }
-          await syncOverlayChat();
+          await syncOverlayChat(activeId);
         } catch (err) {
           console.error('Failed to send direct message from overlay listener:', err);
         }
+      });
+
+      // Hook up contact selection from Maximized native HUD
+      OverlayBridge.initContactSelectListener(async (pubkey) => {
+        get().setActiveConversation(pubkey);
       });
 
       // Synchronize full messages history immediately
@@ -108,5 +117,6 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
 
   setActiveConversation: (pubkey?: string) => {
     set({ activeConversationId: pubkey });
+    syncOverlayChat(pubkey).catch(() => {});
   },
 }));

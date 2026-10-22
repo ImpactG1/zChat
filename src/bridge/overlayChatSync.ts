@@ -2,12 +2,21 @@ import { db } from '@/core/storage/db';
 import { OverlayBridge } from './overlayBridge';
 
 let syncDebounceTimer: any = null;
+let currentActivePubkey: string | undefined = undefined;
+
+export function setActiveOverlayConversation(pubkey?: string): void {
+  currentActivePubkey = pubkey;
+}
 
 /**
- * Synchronizes the most recent conversation and unread count to the native/desktop overlay.
- * Automatically called when incoming messages arrive or outgoing messages are sent.
+ * Synchronizes the active conversation, contacts list for switching, and unread count
+ * to the native/desktop overlay.
  */
-export async function syncOverlayChat(): Promise<void> {
+export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
+  if (preferredPubkey) {
+    currentActivePubkey = preferredPubkey;
+  }
+
   if (syncDebounceTimer) {
     clearTimeout(syncDebounceTimer);
   }
@@ -15,60 +24,88 @@ export async function syncOverlayChat(): Promise<void> {
   syncDebounceTimer = setTimeout(async () => {
     try {
       const contacts = await db.contacts.toArray();
-      const unreadTotal = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+      const groups = await db.groups.toArray();
 
-      // Check both contacts and groups to see which had the most recent activity
-      const latestContact = await db.contacts.orderBy('lastTimestamp').reverse().first();
-      const latestGroup = await db.groups.orderBy('lastTimestamp').reverse().first();
+      const unreadTotal = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0) +
+        groups.reduce((sum, g) => sum + (g.unreadCount || 0), 0);
 
-      let isGroup = false;
-      if (latestGroup && latestContact) {
-        isGroup = (latestGroup.lastTimestamp || 0) > (latestContact.lastTimestamp || 0);
-      } else if (latestGroup && !latestContact) {
-        isGroup = true;
+      // Build unified conversation list for the Maximized chat switcher
+      const contactsList = [
+        ...groups.map((g) => ({
+          pubkey: g.id,
+          alias: g.name ? g.name : 'Squad',
+          unreadCount: g.unreadCount || 0,
+          lastTimestamp: g.lastTimestamp || 0,
+          isGroup: true,
+        })),
+        ...contacts.map((c) => ({
+          pubkey: c.pubkey,
+          alias: c.alias || `User#${c.pubkey.slice(0, 4)}`,
+          unreadCount: c.unreadCount || 0,
+          lastTimestamp: c.lastTimestamp || 0,
+          isGroup: false,
+        })),
+      ].sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+
+      // Determine active conversation
+      let activeItem = contactsList.find((c) => c.pubkey === currentActivePubkey);
+      if (!activeItem && contactsList.length > 0) {
+        activeItem = contactsList[0];
+        currentActivePubkey = activeItem.pubkey;
       }
 
-      let channelTitle = 'ZENYTH HUD';
+      let channelTitle = 'ZENYTH';
       let messagesJson = '[]';
+      const activePubkey = activeItem?.pubkey || '';
 
-      if (isGroup && latestGroup) {
-        channelTitle = latestGroup.name ? `SANCTUM // ${latestGroup.name}` : 'SANCTUM SQUAD';
-        const groupMsgs = await db.groupMessages
-          .where('groupId')
-          .equals(latestGroup.id)
-          .sortBy('timestamp');
+      if (activeItem) {
+        channelTitle = activeItem.alias;
+        if (activeItem.isGroup) {
+          const groupMsgs = await db.groupMessages
+            .where('groupId')
+            .equals(activeItem.pubkey)
+            .sortBy('timestamp');
 
-        messagesJson = JSON.stringify(
-          groupMsgs.slice(-25).map((m) => ({
-            id: m.id,
-            senderTag: m.authorAlias || m.senderTag || 'Teammate',
-            content: m.content,
-            isMe: m.authorAlias === 'You',
-            timestamp: m.timestamp,
-          }))
-        );
-      } else if (latestContact) {
-        channelTitle = latestContact.alias || 'TEAMMATE';
-        const msgs = await db.messages
-          .where('conversationId')
-          .equals(latestContact.pubkey)
-          .sortBy('timestamp');
+          messagesJson = JSON.stringify(
+            groupMsgs.slice(-30).map((m) => ({
+              id: m.id,
+              senderTag: m.authorAlias || m.senderTag || 'Teammate',
+              content: m.content,
+              isMe: m.authorAlias === 'You',
+              timestamp: m.timestamp,
+            }))
+          );
+        } else {
+          const msgs = await db.messages
+            .where('conversationId')
+            .equals(activeItem.pubkey)
+            .sortBy('timestamp');
 
-        messagesJson = JSON.stringify(
-          msgs.slice(-25).map((m) => ({
-            id: m.id,
-            senderTag: m.senderPubkey === latestContact.pubkey ? (latestContact.alias || 'Teammate') : 'You',
-            content: m.content,
-            isMe: m.senderPubkey !== latestContact.pubkey,
-            timestamp: m.timestamp,
-          }))
-        );
+          messagesJson = JSON.stringify(
+            msgs.slice(-30).map((m) => ({
+              id: m.id,
+              senderTag: m.senderPubkey === activeItem!.pubkey ? activeItem!.alias : 'You',
+              content: m.content,
+              isMe: m.senderPubkey !== activeItem!.pubkey,
+              timestamp: m.timestamp,
+            }))
+          );
+        }
       }
 
-      await OverlayBridge.updateChatData(channelTitle, messagesJson);
+      const contactsJson = JSON.stringify(
+        contactsList.map((c) => ({
+          pubkey: c.pubkey,
+          alias: c.alias,
+          unreadCount: c.unreadCount,
+          isGroup: c.isGroup,
+        }))
+      );
+
+      await OverlayBridge.updateChatData(channelTitle, messagesJson, activePubkey, contactsJson);
       await OverlayBridge.updateBadge(unreadTotal);
     } catch (err) {
       console.warn('Failed to sync overlay chat:', err);
     }
-  }, 50);
+  }, 40);
 }

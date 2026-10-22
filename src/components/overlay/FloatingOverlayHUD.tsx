@@ -428,7 +428,31 @@ export const FloatingOverlayHUD: React.FC = () => {
 
               {/* Minimize to Bubble */}
               <button
-                onClick={() => setMode('bubble')}
+                onClick={() => {
+                  SoundEngine.playBladeTick();
+                  setMode('bubble');
+                }}
+                style={{
+                  background: 'var(--void-2)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: 'var(--text-silver)',
+                  cursor: 'pointer',
+                  padding: '3px 6px',
+                  fontSize: '10px',
+                  fontFamily: 'var(--font-mono)',
+                  borderRadius: '2px',
+                }}
+                title="Minimize to Floating Sigil"
+              >
+                BUBBLE
+              </button>
+
+              {/* Exit Overlay to Dashboard */}
+              <button
+                onClick={() => {
+                  SoundEngine.playBladeTick();
+                  toggleOverlay();
+                }}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -436,9 +460,9 @@ export const FloatingOverlayHUD: React.FC = () => {
                   cursor: 'pointer',
                   padding: '4px',
                 }}
-                title="Minimize to Sigil"
+                title="Exit Overlay to Dashboard"
               >
-                <IconClose size={13} />
+                <IconClose size={13} color="var(--status-error)" />
               </button>
             </div>
           </div>

@@ -14,6 +14,24 @@ import com.getcapacitor.annotation.CapacitorPlugin
 @CapacitorPlugin(name = "ZChatOverlay")
 class ZChatOverlayPlugin : Plugin() {
 
+    companion object {
+        private var instance: ZChatOverlayPlugin? = null
+
+        fun notifyMessageSent(text: String) {
+            instance?.let { plugin ->
+                val ret = JSObject().apply {
+                    put("text", text)
+                }
+                plugin.notifyListeners("overlaySendMessage", ret)
+            }
+        }
+    }
+
+    override fun load() {
+        super.load()
+        instance = this
+    }
+
     @PluginMethod
     fun checkOverlayPermission(call: PluginCall) {
         val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -47,13 +65,22 @@ class ZChatOverlayPlugin : Plugin() {
     fun showOverlay(call: PluginCall) {
         val opacity = call.getInt("opacity", 85) ?: 85
         val clickThrough = call.getBoolean("isClickThrough", false) ?: false
+        val title = call.getString("channelTitle", "ZENYTH HUD") ?: "ZENYTH HUD"
+        val messagesJson = call.getString("recentMessagesJson", "[]") ?: "[]"
 
         val intent = Intent(context, OverlayService::class.java).apply {
             action = OverlayService.ACTION_SHOW
             putExtra(OverlayService.EXTRA_OPACITY, opacity)
             putExtra(OverlayService.EXTRA_CLICK_THROUGH, clickThrough)
+            putExtra(OverlayService.EXTRA_CHANNEL_TITLE, title)
+            putExtra(OverlayService.EXTRA_MESSAGES_JSON, messagesJson)
         }
         ContextCompat.startForegroundService(context, intent)
+
+        // Minimize MainActivity to background so user is directly over their game/home screen
+        activity.runOnUiThread {
+            activity.moveTaskToBack(true)
+        }
 
         call.resolve(JSObject().put("success", true))
     }
@@ -98,6 +125,21 @@ class ZChatOverlayPlugin : Plugin() {
         val intent = Intent(context, OverlayService::class.java).apply {
             action = OverlayService.ACTION_UPDATE_BADGE
             putExtra(OverlayService.EXTRA_BADGE_COUNT, count)
+        }
+        context.startService(intent)
+
+        call.resolve(JSObject().put("success", true))
+    }
+
+    @PluginMethod
+    fun updateChatMessages(call: PluginCall) {
+        val title = call.getString("channelTitle", "") ?: ""
+        val messagesJson = call.getString("messagesJson", "[]") ?: "[]"
+
+        val intent = Intent(context, OverlayService::class.java).apply {
+            action = OverlayService.ACTION_UPDATE_CHAT
+            putExtra(OverlayService.EXTRA_CHANNEL_TITLE, title)
+            putExtra(OverlayService.EXTRA_MESSAGES_JSON, messagesJson)
         }
         context.startService(intent)
 

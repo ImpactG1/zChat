@@ -20,13 +20,17 @@ import { DesktopLayout } from '@/components/desktop/DesktopLayout';
 import { purgeLegacyDemoData } from '@/core/storage/db';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import { useOverlayStore } from '@/stores/useOverlayStore';
+import { OverlayBridge } from '@/bridge/overlayBridge';
 
 export const App: React.FC = () => {
   const { identity, isInitialized, init } = useAuthStore();
   const { loadRelays } = useRelayStore();
   const { initTheme } = useThemeStore();
   const { init: initP2P, roomState } = useP2PStore();
-  const { toggleOverlay } = useOverlayStore();
+  const { isEnabled, toggleOverlay } = useOverlayStore();
+
+  const isDesktop = OverlayBridge.isDesktop();
+  const isNative = OverlayBridge.isNativePlatform();
 
   const [activePubkey, setActivePubkey] = useState<string | undefined>();
   const [activeGroupId, setActiveGroupId] = useState<string | undefined>();
@@ -82,7 +86,6 @@ export const App: React.FC = () => {
     }
   };
 
-
   useEffect(() => {
     init();
     initTheme();
@@ -119,7 +122,6 @@ export const App: React.FC = () => {
     }
   }, [roomState.code, activePubkey, activeGroupId]);
 
-
   if (!isInitialized) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--void-0)' }}>
@@ -138,86 +140,96 @@ export const App: React.FC = () => {
     );
   }
 
+  // When Desktop is in Overlay mode, display ONLY the floating HUD with transparent background over games/apps
+  const isDesktopOverlayActive = isDesktop && isEnabled;
+
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflow: 'hidden' }}>
-      {/* Top Header */}
-      <Header
-        onOpenRelays={() => setShowRelays(true)}
-        onOpenSeed={() => setShowSeed(true)}
-        onOpenThemes={() => setShowThemes(true)}
-      />
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: isDesktopOverlayActive ? 'transparent' : 'var(--bg-primary)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Top Header: Hidden when in Desktop Overlay mode */}
+      {!isDesktopOverlayActive && (
+        <Header
+          onOpenRelays={() => setShowRelays(true)}
+          onOpenSeed={() => setShowSeed(true)}
+          onOpenThemes={() => setShowThemes(true)}
+        />
+      )}
 
-      {/* Floating Zenyth Overlay HUD (Bubble, Mini, Full Panel) */}
-      <FloatingOverlayHUD />
+      {/* Floating Zenyth Overlay HUD (Bubble, Mini, Full Panel)
+          Only rendered in DOM for Desktop and Web simulator.
+          On Native Android, OverlayService displays the floating system overlay directly over apps! */}
+      {!isNative && isEnabled && <FloatingOverlayHUD />}
 
-      {/* Main View Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-        {isDesktopLayout ? (
-          <DesktopLayout
-            activePubkey={activePubkey}
-            activeGroupId={activeGroupId}
-            activeSquadCode={activeSquadCode}
-            onSelectContact={(pubkey) => {
-              setActivePubkey(pubkey);
-              setActiveGroupId(undefined);
-              setActiveSquadCode(undefined);
-            }}
-            onSelectGroup={(groupId) => {
-              setActiveGroupId(groupId);
-              setActivePubkey(undefined);
-              setActiveSquadCode(undefined);
-            }}
-            onSelectSquad={(code) => {
-              setActiveSquadCode(code);
-              setActivePubkey(undefined);
-              setActiveGroupId(undefined);
-            }}
-            onBack={() => {
-              setActivePubkey(undefined);
-              setActiveGroupId(undefined);
-              setActiveSquadCode(undefined);
-            }}
-            onOpenRelays={() => setShowRelays(true)}
-            onOpenSeed={() => setShowSeed(true)}
-            onOpenCommandPalette={() => setShowCommandPalette(true)}
-          />
-        ) : activeSquadCode ? (
-          <SquadRoomView
-            onBack={() => setActiveSquadCode(undefined)}
-          />
-        ) : activeGroupId ? (
-          <GroupChatView
-            groupId={activeGroupId}
-            onBack={() => setActiveGroupId(undefined)}
-          />
-        ) : activePubkey ? (
-          <ChatView
-            contactPubkey={activePubkey}
-            onBack={() => setActivePubkey(undefined)}
-          />
-        ) : (
-          <ConversationList
-            activePubkey={activePubkey}
-            activeGroupId={activeGroupId}
-            activeSquadCode={activeSquadCode}
-            onSelectContact={(pubkey) => {
-              setActivePubkey(pubkey);
-              setActiveGroupId(undefined);
-              setActiveSquadCode(undefined);
-            }}
-            onSelectGroup={(groupId) => {
-              setActiveGroupId(groupId);
-              setActivePubkey(undefined);
-              setActiveSquadCode(undefined);
-            }}
-            onSelectSquad={(code) => {
-              setActiveSquadCode(code);
-              setActivePubkey(undefined);
-              setActiveGroupId(undefined);
-            }}
-          />
-        )}
-      </main>
+      {/* Main View Area: Hidden when in Desktop Overlay mode */}
+      {!isDesktopOverlayActive && (
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+          {isDesktopLayout ? (
+            <DesktopLayout
+              activePubkey={activePubkey}
+              activeGroupId={activeGroupId}
+              activeSquadCode={activeSquadCode}
+              onSelectContact={(pubkey) => {
+                setActivePubkey(pubkey);
+                setActiveGroupId(undefined);
+                setActiveSquadCode(undefined);
+              }}
+              onSelectGroup={(groupId) => {
+                setActiveGroupId(groupId);
+                setActivePubkey(undefined);
+                setActiveSquadCode(undefined);
+              }}
+              onSelectSquad={(code) => {
+                setActiveSquadCode(code);
+                setActivePubkey(undefined);
+                setActiveGroupId(undefined);
+              }}
+              onBack={() => {
+                setActivePubkey(undefined);
+                setActiveGroupId(undefined);
+                setActiveSquadCode(undefined);
+              }}
+              onOpenRelays={() => setShowRelays(true)}
+              onOpenSeed={() => setShowSeed(true)}
+              onOpenCommandPalette={() => setShowCommandPalette(true)}
+            />
+          ) : activeSquadCode ? (
+            <SquadRoomView onBack={() => setActiveSquadCode(undefined)} />
+          ) : activeGroupId ? (
+            <GroupChatView groupId={activeGroupId} onBack={() => setActiveGroupId(undefined)} />
+          ) : activePubkey ? (
+            <ChatView contactPubkey={activePubkey} onBack={() => setActivePubkey(undefined)} />
+          ) : (
+            <ConversationList
+              activePubkey={activePubkey}
+              activeGroupId={activeGroupId}
+              activeSquadCode={activeSquadCode}
+              onSelectContact={(pubkey) => {
+                setActivePubkey(pubkey);
+                setActiveGroupId(undefined);
+                setActiveSquadCode(undefined);
+              }}
+              onSelectGroup={(groupId) => {
+                setActiveGroupId(groupId);
+                setActivePubkey(undefined);
+                setActiveSquadCode(undefined);
+              }}
+              onSelectSquad={(code) => {
+                setActiveSquadCode(code);
+                setActivePubkey(undefined);
+                setActiveGroupId(undefined);
+              }}
+            />
+          )}
+        </main>
+      )}
 
       {/* Command Palette (Ctrl+K) */}
       <CommandPalette
@@ -230,7 +242,6 @@ export const App: React.FC = () => {
       {showRelays && <RelayModal onClose={() => setShowRelays(false)} />}
       {showSeed && <SeedBackupModal onClose={() => setShowSeed(false)} />}
       {showThemes && <ThemeSwitcherModal onClose={() => setShowThemes(false)} />}
-
     </div>
   );
 };

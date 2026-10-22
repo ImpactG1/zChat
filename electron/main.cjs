@@ -8,7 +8,7 @@ function createWindow() {
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
   // Window starts docked to right side of screen like a gamer HUD
-  const windowWidth = 440;
+  const windowWidth = 520;
   const windowHeight = Math.min(840, screenHeight - 60);
 
   mainWindow = new BrowserWindow({

@@ -25,10 +25,13 @@ class OverlayService : Service() {
         const val ACTION_SET_OPACITY = "com.zchat.app.overlay.ACTION_SET_OPACITY"
         const val ACTION_SET_CLICK_THROUGH = "com.zchat.app.overlay.ACTION_SET_CLICK_THROUGH"
         const val ACTION_UPDATE_BADGE = "com.zchat.app.overlay.ACTION_UPDATE_BADGE"
+        const val ACTION_UPDATE_CHAT = "com.zchat.app.overlay.ACTION_UPDATE_CHAT"
 
         const val EXTRA_OPACITY = "extra_opacity"
         const val EXTRA_CLICK_THROUGH = "extra_click_through"
         const val EXTRA_BADGE_COUNT = "extra_badge_count"
+        const val EXTRA_CHANNEL_TITLE = "extra_channel_title"
+        const val EXTRA_MESSAGES_JSON = "extra_messages_json"
     }
 
     private var windowManager: WindowManager? = null
@@ -49,7 +52,9 @@ class OverlayService : Service() {
             ACTION_SHOW -> {
                 val opacity = intent.getIntExtra(EXTRA_OPACITY, 85)
                 val clickThrough = intent.getBooleanExtra(EXTRA_CLICK_THROUGH, false)
-                attachBubbleView(opacity, clickThrough)
+                val title = intent.getStringExtra(EXTRA_CHANNEL_TITLE) ?: "ZENYTH HUD"
+                val messagesJson = intent.getStringExtra(EXTRA_MESSAGES_JSON) ?: "[]"
+                attachBubbleView(opacity, clickThrough, title, messagesJson)
             }
             ACTION_HIDE -> {
                 detachBubbleView()
@@ -73,12 +78,25 @@ class OverlayService : Service() {
                 val count = intent.getIntExtra(EXTRA_BADGE_COUNT, 0)
                 bubbleView?.setUnreadCount(count)
             }
+            ACTION_UPDATE_CHAT -> {
+                val title = intent.getStringExtra(EXTRA_CHANNEL_TITLE) ?: ""
+                val messagesJson = intent.getStringExtra(EXTRA_MESSAGES_JSON) ?: "[]"
+                bubbleView?.updateChatData(title, messagesJson)
+            }
         }
         return START_STICKY
     }
 
-    private fun attachBubbleView(initialOpacity: Int, initialClickThrough: Boolean) {
-        if (isViewAttached) return
+    private fun attachBubbleView(
+        initialOpacity: Int,
+        initialClickThrough: Boolean,
+        initialTitle: String,
+        initialMessagesJson: String
+    ) {
+        if (isViewAttached) {
+            bubbleView?.updateChatData(initialTitle, initialMessagesJson)
+            return
+        }
 
         val wm = windowManager ?: return
 
@@ -100,17 +118,23 @@ class OverlayService : Service() {
             alpha = (initialOpacity.coerceIn(10, 100)) / 100f
         }
 
-        bubbleView = FloatingBubbleView(this, wm, params) {
-            // On Bubble Click: Bring MainActivity to foreground
-            val launchIntent = Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        bubbleView = FloatingBubbleView(
+            context = this,
+            windowManager = wm,
+            layoutParams = params,
+            onSendMessageListener = { text ->
+                ZChatOverlayPlugin.notifyMessageSent(text)
+            },
+            onCloseOverlayListener = {
+                detachBubbleView()
+                stopSelf()
             }
-            startActivity(launchIntent)
-        }
+        )
 
         try {
             wm.addView(bubbleView, params)
             isViewAttached = true
+            bubbleView?.updateChatData(initialTitle, initialMessagesJson)
         } catch (e: Exception) {
             e.printStackTrace()
         }

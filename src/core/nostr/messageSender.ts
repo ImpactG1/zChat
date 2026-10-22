@@ -3,6 +3,7 @@ import { db } from '../storage/db';
 import { KeyVault } from '../storage/keyVault';
 import { nostrClient } from './client';
 import { ChatMessage, OutboxItem } from '@/types';
+import { syncOverlayChat } from '@/bridge/overlayChatSync';
 
 /**
  * Sends a NIP-17 Gift-Wrapped message to a recipient pubkey
@@ -29,6 +30,7 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
 
   // 1. Optimistically store in local IndexedDB
   await db.messages.put(chatMessage);
+  syncOverlayChat().catch(() => {});
 
   // 2. Update contact record
   const existingContact = await db.contacts.get(recipientPubkey);

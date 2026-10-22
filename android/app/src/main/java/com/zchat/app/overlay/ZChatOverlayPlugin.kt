@@ -16,6 +16,8 @@ class ZChatOverlayPlugin : Plugin() {
 
     companion object {
         private var instance: ZChatOverlayPlugin? = null
+        @JvmField
+        var isOverlayActive: Boolean = false
 
         fun notifyMessageSent(text: String) {
             instance?.let { plugin ->
@@ -23,6 +25,13 @@ class ZChatOverlayPlugin : Plugin() {
                     put("text", text)
                 }
                 plugin.notifyListeners("overlaySendMessage", ret)
+            }
+        }
+
+        fun notifyOverlayClosed() {
+            isOverlayActive = false
+            instance?.let { plugin ->
+                plugin.notifyListeners("overlayClosed", JSObject())
             }
         }
     }
@@ -76,6 +85,7 @@ class ZChatOverlayPlugin : Plugin() {
             putExtra(OverlayService.EXTRA_MESSAGES_JSON, messagesJson)
         }
         ContextCompat.startForegroundService(context, intent)
+        isOverlayActive = true
 
         // Minimize MainActivity to background so user is directly over their game/home screen
         activity.runOnUiThread {
@@ -87,6 +97,7 @@ class ZChatOverlayPlugin : Plugin() {
 
     @PluginMethod
     fun hideOverlay(call: PluginCall) {
+        isOverlayActive = false
         val intent = Intent(context, OverlayService::class.java).apply {
             action = OverlayService.ACTION_HIDE
         }

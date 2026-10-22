@@ -7,10 +7,17 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.zchat.app.MainActivity
 
@@ -38,12 +45,17 @@ class OverlayService : Service() {
     private var bubbleView: FloatingBubbleView? = null
     private var isViewAttached = false
 
+    // Secondary touchable window for restoring touch when pass-through is active
+    private var touchRestorePillView: View? = null
+    private var isPillAttached = false
+    private var isCurrentPassThrough = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildForegroundNotification())
+        startForeground(NOTIFICATION_ID, buildForegroundNotification(isPassThru = false))
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
 
@@ -72,7 +84,7 @@ class OverlayService : Service() {
             }
             ACTION_SET_CLICK_THROUGH -> {
                 val clickThrough = intent.getBooleanExtra(EXTRA_CLICK_THROUGH, false)
-                bubbleView?.setClickThrough(clickThrough)
+                handleSetClickThrough(clickThrough)
             }
             ACTION_UPDATE_BADGE -> {
                 val count = intent.getIntExtra(EXTRA_BADGE_COUNT, 0)
@@ -94,14 +106,17 @@ class OverlayService : Service() {
         initialMessagesJson: String
     ) {
         if (isViewAttached) {
+            bubbleView?.setOpacity(initialOpacity)
             bubbleView?.updateChatData(initialTitle, initialMessagesJson)
+            if (initialClickThrough != isCurrentPassThrough) {
+                handleSetClickThrough(initialClickThrough)
+            }
             return
         }
 
         val wm = windowManager ?: return
 
-        var layoutFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+        var layoutFlags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
         if (initialClickThrough) {
@@ -115,7 +130,7 @@ class OverlayService : Service() {
             layoutFlags,
             PixelFormat.TRANSLUCENT
         ).apply {
-            alpha = (initialOpacity.coerceIn(10, 100)) / 100f
+            alpha = 1.0f // Entire window stays 100% solid; ghost effect is background-only
         }
 
         bubbleView = FloatingBubbleView(
@@ -124,6 +139,9 @@ class OverlayService : Service() {
             layoutParams = params,
             onSendMessageListener = { text ->
                 ZChatOverlayPlugin.notifyMessageSent(text)
+            },
+            onToggleClickThroughListener = { enabled ->
+                handleSetClickThrough(enabled)
             },
             onCloseOverlayListener = {
                 detachBubbleView()
@@ -134,24 +152,123 @@ class OverlayService : Service() {
         try {
             wm.addView(bubbleView, params)
             isViewAttached = true
+            bubbleView?.setOpacity(initialOpacity)
             bubbleView?.updateChatData(initialTitle, initialMessagesJson)
+            if (initialClickThrough) {
+                handleSetClickThrough(true)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     private fun detachBubbleView() {
-        if (!isViewAttached) return
+        hideTouchRestorePill()
+        if (isViewAttached) {
+            try {
+                windowManager?.removeView(bubbleView)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                bubbleView = null
+                isViewAttached = false
+            }
+        }
+        ZChatOverlayPlugin.notifyOverlayClosed()
+    }
+
+    // =========================================================================
+    // PASS-THROUGH HANDLER & TOUCH RESTORATION
+    // Solves the touch trap by rendering an independent touchable pill & notification action
+    // =========================================================================
+    private fun handleSetClickThrough(enabled: Boolean) {
+        isCurrentPassThrough = enabled
+        bubbleView?.setClickThrough(enabled)
+        if (enabled) {
+            showTouchRestorePill()
+        } else {
+            hideTouchRestorePill()
+        }
+
+        val notification = buildForegroundNotification(isPassThru = enabled)
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        manager?.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun showTouchRestorePill() {
+        if (isPillAttached) return
+        val wm = windowManager ?: return
+        val density = resources.displayMetrics.density
+
+        val pillLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val bg = GradientDrawable().apply {
+                cornerRadius = 16f * density
+                setColor(Color.parseColor("#F59E0B")) // Amber neon
+                setStroke((1.5f * density).toInt(), Color.WHITE)
+            }
+            background = bg
+            elevation = 30f * density
+            setPadding(
+                (14 * density).toInt(),
+                (7 * density).toInt(),
+                (14 * density).toInt(),
+                (7 * density).toInt()
+            )
+
+            val tv = TextView(context).apply {
+                text = "⚡ PASS-THRU  [RESTORE TOUCH]"
+                setTextColor(Color.BLACK)
+                textSize = 10f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+            }
+            addView(tv)
+
+            setOnClickListener {
+                handleSetClickThrough(false)
+            }
+        }
+
+        touchRestorePillView = pillLayout
+
+        // CRITICAL: This window has FLAG_NOT_FOCUSABLE, but NOT FLAG_NOT_TOUCHABLE.
+        // So the user can always tap this pill at the top of the screen to regain touch!
+        val pillParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = (20 * density).toInt()
+        }
+
         try {
-            windowManager?.removeView(bubbleView)
+            wm.addView(pillLayout, pillParams)
+            isPillAttached = true
         } catch (e: Exception) {
             e.printStackTrace()
-        } finally {
-            bubbleView = null
-            isViewAttached = false
         }
     }
 
+    private fun hideTouchRestorePill() {
+        if (!isPillAttached) return
+        try {
+            windowManager?.removeView(touchRestorePillView)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            touchRestorePillView = null
+            isPillAttached = false
+        }
+    }
+
+    // =========================================================================
+    // NOTIFICATIONS
+    // =========================================================================
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -167,22 +284,44 @@ class OverlayService : Service() {
         }
     }
 
-    private fun buildForegroundNotification(): Notification {
-        val pendingIntent = PendingIntent.getActivity(
+    private fun buildForegroundNotification(isPassThru: Boolean): Notification {
+        val openIntent = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("zChat Gamer HUD Active")
-            .setContentText("Always-on-top chat head running")
+            .setContentText(
+                if (isPassThru) "Pass-Through active (touches pass to game)" else "Always-on-top HUD running"
+            )
             .setSmallIcon(com.zchat.app.R.drawable.ic_zchat_bubble)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(openIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+
+        // If in Pass-Through mode, provide an action button directly in notification drawer to restore touch
+        if (isPassThru) {
+            val restoreIntent = Intent(this, OverlayService::class.java).apply {
+                action = ACTION_SET_CLICK_THROUGH
+                putExtra(EXTRA_CLICK_THROUGH, false)
+            }
+            val restorePendingIntent = PendingIntent.getService(
+                this,
+                1,
+                restoreIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                com.zchat.app.R.drawable.ic_zchat_bubble,
+                "RESTORE TOUCH",
+                restorePendingIntent
+            )
+        }
+
+        return builder.build()
     }
 
     override fun onDestroy() {

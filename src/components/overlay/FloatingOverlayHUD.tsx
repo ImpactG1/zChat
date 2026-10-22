@@ -1,21 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/core/storage/db';
 import { sendDirectMessage } from '@/core/nostr/messageSender';
-import { Contact, ChatMessage } from '@/types';
+import { Contact, ChatMessage, GroupChat, GroupMessage } from '@/types';
 import { useOverlayStore } from '@/stores/useOverlayStore';
 import { EmblemLogo } from '@/components/common/EmblemLogo';
-import { MessageBubble } from '@/components/design-system/MessageBubble';
 import { ChromeButton } from '@/components/design-system/ChromeButton';
 import {
   IconGhostMode,
   IconClickThrough,
   IconBladeSend,
-  IconClose,
 } from '@/components/icons/RazorIcons';
 import { SoundEngine } from '@/core/feedback/soundEffects';
 
-export type OverlayMode = 'bubble' | 'mini' | 'full';
+export type OverlayMode = 'minimized' | 'maximized';
 
 export const FloatingOverlayHUD: React.FC = () => {
   const {
@@ -27,9 +25,10 @@ export const FloatingOverlayHUD: React.FC = () => {
     toggleOverlay,
   } = useOverlayStore();
 
-  const [mode, setMode] = useState<OverlayMode>('bubble');
+  // 2 Distinct States: Minimized (floating bubble) and Maximized (full HUD)
+  const [mode, setMode] = useState<OverlayMode>('maximized');
 
-  // Bubble Position (Edge-snapping)
+  // Minimized Bubble Position (Edge-snapping)
   const [bubblePos, setBubblePos] = useState(() => ({
     x: typeof window !== 'undefined' ? Math.max(20, window.innerWidth - 80) : 320,
     y: 160,
@@ -37,29 +36,32 @@ export const FloatingOverlayHUD: React.FC = () => {
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
   const bubbleDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
 
-  // Mini Window Geometry (Starts at Top-Left corner: x: 24, y: 72)
-  const [miniPos, setMiniPos] = useState({ x: 24, y: 72 });
-  const [miniSize, setMiniSize] = useState({ width: 340, height: 340 });
-  const [isDraggingMini, setIsDraggingMini] = useState(false);
-  const miniDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
-  const [isResizingMini, setIsResizingMini] = useState(false);
-  const miniResizeStartRef = useRef({ startX: 0, startY: 0, initW: 0, initH: 0 });
+  // Maximized HUD Window Geometry
+  const [panelPos, setPanelPos] = useState({ x: 32, y: 56 });
+  const [panelSize, setPanelSize] = useState({ width: 380, height: 480 });
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const panelDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
+  const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const panelResizeStartRef = useRef({ startX: 0, startY: 0, initW: 0, initH: 0 });
 
-  // Full Window Geometry (Starts at Top-Left corner: x: 36, y: 64)
-  const [fullPos, setFullPos] = useState({ x: 36, y: 64 });
-  const [fullSize, setFullSize] = useState({ width: 480, height: 560 });
-  const [isDraggingFull, setIsDraggingFull] = useState(false);
-  const fullDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
-  const [isResizingFull, setIsResizingFull] = useState(false);
-  const fullResizeStartRef = useRef({ startX: 0, startY: 0, initW: 0, initH: 0 });
+  // Messages Scroll Ref
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Dynamically query latest active contact
+  // Dynamically query latest active contact or group
   const activeContact = useLiveQuery<Contact | undefined>(
     () => db.contacts.orderBy('lastTimestamp').reverse().first()
   );
 
-  // Dynamically query messages for active contact
-  const messages = useLiveQuery<ChatMessage[]>(
+  const activeGroup = useLiveQuery<GroupChat | undefined>(
+    () => db.groups.orderBy('lastTimestamp').reverse().first()
+  );
+
+  const isGroupActive = Boolean(
+    activeGroup && (!activeContact || (activeGroup.lastTimestamp || 0) > (activeContact.lastTimestamp || 0))
+  );
+
+  // Dynamically query messages
+  const directMessages = useLiveQuery<ChatMessage[]>(
     async () => {
       if (!activeContact?.pubkey) return [];
       return db.messages.where('conversationId').equals(activeContact.pubkey).sortBy('timestamp');
@@ -67,12 +69,25 @@ export const FloatingOverlayHUD: React.FC = () => {
     [activeContact?.pubkey]
   ) ?? [];
 
+  const groupMessages = useLiveQuery<GroupMessage[]>(
+    async () => {
+      if (!activeGroup?.id) return [];
+      return db.groupMessages.where('groupId').equals(activeGroup.id).sortBy('timestamp');
+    },
+    [activeGroup?.id]
+  ) ?? [];
+
   const [replyText, setReplyText] = useState('');
+
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [directMessages.length, groupMessages.length]);
 
   if (!isEnabled) return null;
 
   // =========================================================================
-  // 1. BUBBLE DRAG HANDLERS
+  // 1. BUBBLE DRAG HANDLERS (MINIMIZED STATE)
   // =========================================================================
   const handleBubblePointerDown = (e: React.PointerEvent) => {
     setIsDraggingBubble(true);
@@ -102,135 +117,70 @@ export const FloatingOverlayHUD: React.FC = () => {
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
     const midX = window.innerWidth / 2;
-    const snappedX = bubblePos.x < midX ? 16 : window.innerWidth - 70;
+    const snappedX = bubblePos.x < midX ? 16 : window.innerWidth - 72;
     setBubblePos((prev) => ({ ...prev, x: snappedX }));
   };
 
   // =========================================================================
-  // 2. MINI WINDOW DRAG & RESIZE HANDLERS
+  // 2. PANEL DRAG & RESIZE HANDLERS (MAXIMIZED STATE)
   // =========================================================================
-  const handleMiniDragStart = (e: React.PointerEvent) => {
+  const handlePanelDragStart = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest('button, input, textarea')) return;
-    setIsDraggingMini(true);
-    miniDragStartRef.current = {
+    setIsDraggingPanel(true);
+    panelDragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      initX: miniPos.x,
-      initY: miniPos.y,
+      initX: panelPos.x,
+      initY: panelPos.y,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const handleMiniDragMove = (e: React.PointerEvent) => {
-    if (!isDraggingMini) return;
-    const dx = e.clientX - miniDragStartRef.current.startX;
-    const dy = e.clientY - miniDragStartRef.current.startY;
-    const newX = Math.max(0, Math.min(window.innerWidth - 120, miniDragStartRef.current.initX + dx));
-    const newY = Math.max(0, Math.min(window.innerHeight - 60, miniDragStartRef.current.initY + dy));
-    setMiniPos({ x: newX, y: newY });
+  const handlePanelDragMove = (e: React.PointerEvent) => {
+    if (!isDraggingPanel) return;
+    const dx = e.clientX - panelDragStartRef.current.startX;
+    const dy = e.clientY - panelDragStartRef.current.startY;
+    const newX = Math.max(0, Math.min(window.innerWidth - 140, panelDragStartRef.current.initX + dx));
+    const newY = Math.max(0, Math.min(window.innerHeight - 70, panelDragStartRef.current.initY + dy));
+    setPanelPos({ x: newX, y: newY });
   };
 
-  const handleMiniDragEnd = (e: React.PointerEvent) => {
-    if (!isDraggingMini) return;
-    setIsDraggingMini(false);
+  const handlePanelDragEnd = (e: React.PointerEvent) => {
+    if (!isDraggingPanel) return;
+    setIsDraggingPanel(false);
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
   };
 
-  const handleMiniResizeStart = (e: React.PointerEvent) => {
+  const handlePanelResizeStart = (e: React.PointerEvent) => {
     e.stopPropagation();
-    setIsResizingMini(true);
-    miniResizeStartRef.current = {
+    setIsResizingPanel(true);
+    panelResizeStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      initW: miniSize.width,
-      initH: miniSize.height,
+      initW: panelSize.width,
+      initH: panelSize.height,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const handleMiniResizeMove = (e: React.PointerEvent) => {
-    if (!isResizingMini) return;
-    const dw = e.clientX - miniResizeStartRef.current.startX;
-    const dh = e.clientY - miniResizeStartRef.current.startY;
-    const maxW = Math.max(260, window.innerWidth - miniPos.x - 10);
-    const maxH = Math.max(200, window.innerHeight - miniPos.y - 10);
-    setMiniSize({
-      width: Math.max(260, Math.min(maxW, miniResizeStartRef.current.initW + dw)),
-      height: Math.max(200, Math.min(maxH, miniResizeStartRef.current.initH + dh)),
+  const handlePanelResizeMove = (e: React.PointerEvent) => {
+    if (!isResizingPanel) return;
+    const dw = e.clientX - panelResizeStartRef.current.startX;
+    const dh = e.clientY - panelResizeStartRef.current.startY;
+    const maxW = Math.max(300, window.innerWidth - panelPos.x - 10);
+    const maxH = Math.max(260, window.innerHeight - panelPos.y - 10);
+    setPanelSize({
+      width: Math.max(300, Math.min(maxW, panelResizeStartRef.current.initW + dw)),
+      height: Math.max(260, Math.min(maxH, panelResizeStartRef.current.initH + dh)),
     });
   };
 
-  const handleMiniResizeEnd = (e: React.PointerEvent) => {
-    if (!isResizingMini) return;
-    setIsResizingMini(false);
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {}
-  };
-
-  // =========================================================================
-  // 3. FULL WINDOW DRAG & RESIZE HANDLERS
-  // =========================================================================
-  const handleFullDragStart = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('button, input, textarea')) return;
-    setIsDraggingFull(true);
-    fullDragStartRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      initX: fullPos.x,
-      initY: fullPos.y,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handleFullDragMove = (e: React.PointerEvent) => {
-    if (!isDraggingFull) return;
-    const dx = e.clientX - fullDragStartRef.current.startX;
-    const dy = e.clientY - fullDragStartRef.current.startY;
-    const newX = Math.max(0, Math.min(window.innerWidth - 160, fullDragStartRef.current.initX + dx));
-    const newY = Math.max(0, Math.min(window.innerHeight - 80, fullDragStartRef.current.initY + dy));
-    setFullPos({ x: newX, y: newY });
-  };
-
-  const handleFullDragEnd = (e: React.PointerEvent) => {
-    if (!isDraggingFull) return;
-    setIsDraggingFull(false);
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {}
-  };
-
-  const handleFullResizeStart = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    setIsResizingFull(true);
-    fullResizeStartRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      initW: fullSize.width,
-      initH: fullSize.height,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handleFullResizeMove = (e: React.PointerEvent) => {
-    if (!isResizingFull) return;
-    const dw = e.clientX - fullResizeStartRef.current.startX;
-    const dh = e.clientY - fullResizeStartRef.current.startY;
-    const maxW = Math.max(340, window.innerWidth - fullPos.x - 10);
-    const maxH = Math.max(300, window.innerHeight - fullPos.y - 10);
-    setFullSize({
-      width: Math.max(340, Math.min(maxW, fullResizeStartRef.current.initW + dw)),
-      height: Math.max(300, Math.min(maxH, fullResizeStartRef.current.initH + dh)),
-    });
-  };
-
-  const handleFullResizeEnd = (e: React.PointerEvent) => {
-    if (!isResizingFull) return;
-    setIsResizingFull(false);
+  const handlePanelResizeEnd = (e: React.PointerEvent) => {
+    if (!isResizingPanel) return;
+    setIsResizingPanel(false);
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
@@ -250,6 +200,11 @@ export const FloatingOverlayHUD: React.FC = () => {
   };
 
   const hudOpacityValue = opacity / 100;
+  const channelDisplayTitle = isGroupActive
+    ? (activeGroup?.name ? `SANCTUM // ${activeGroup.name.toUpperCase()}` : 'SANCTUM SQUAD')
+    : (activeContact ? activeContact.alias.toUpperCase() : 'ZENYTH HUD');
+
+  const unreadBadgeCount = (activeContact?.unreadCount || 0) + (activeGroup?.unreadCount || 0);
 
   return (
     <div
@@ -260,8 +215,10 @@ export const FloatingOverlayHUD: React.FC = () => {
         zIndex: 99999,
       }}
     >
-      {/* 1. FLOATING BUBBLE MODE */}
-      {mode === 'bubble' && (
+      {/* ================================================================= */}
+      {/* 1. STATE 1: MINIMIZED FLOATING BUBBLE                             */}
+      {/* ================================================================= */}
+      {mode === 'minimized' && (
         <div
           onPointerDown={handleBubblePointerDown}
           onPointerMove={handleBubblePointerMove}
@@ -269,19 +226,19 @@ export const FloatingOverlayHUD: React.FC = () => {
           onClick={() => {
             if (!isDraggingBubble) {
               SoundEngine.playBladeTick();
-              setMode('mini');
+              setMode('maximized');
             }
           }}
           style={{
             position: 'fixed',
             left: `${bubblePos.x}px`,
             top: `${bubblePos.y}px`,
-            width: '56px',
-            height: '56px',
+            width: '58px',
+            height: '58px',
             background: 'var(--void-1)',
-            border: '1.5px solid rgba(255, 255, 255, 0.45)',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.8)',
-            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+            borderRadius: '50%',
+            border: '2px solid #00F0FF',
+            boxShadow: '0 0 20px rgba(0, 240, 255, 0.4), 0 8px 24px rgba(0, 0, 0, 0.85)',
             cursor: isDraggingBubble ? 'grabbing' : 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -290,83 +247,123 @@ export const FloatingOverlayHUD: React.FC = () => {
             pointerEvents: 'auto',
             transition: isDraggingBubble ? 'none' : 'transform var(--transition-fast)',
           }}
-          title="Zenyth HUD Sigil (Click to open chat in top-left)"
+          title="Zenyth HUD Sigil (Click to maximize chat)"
         >
           <EmblemLogo size={42} />
 
           {/* Unread Stack Badge */}
-          {activeContact && activeContact.unreadCount > 0 && (
+          {unreadBadgeCount > 0 && (
             <div
               style={{
                 position: 'absolute',
                 top: '-4px',
                 right: '-4px',
-                width: '16px',
-                height: '16px',
-                background: '#ffffff',
-                color: '#000000',
-                borderRadius: '2px',
+                minWidth: '18px',
+                height: '18px',
+                padding: '0 4px',
+                background: '#F43F5E',
+                color: '#ffffff',
+                borderRadius: '9px',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '10px',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 8px rgba(255, 255, 255, 0.9)',
+                boxShadow: '0 0 10px rgba(244, 63, 94, 0.9)',
               }}
             >
-              {activeContact.unreadCount}
+              {unreadBadgeCount > 99 ? '99+' : unreadBadgeCount}
             </div>
           )}
         </div>
       )}
 
-      {/* 2. COMPACT MINI HUD PANEL (Moveable + Resizable + Transparency to 0%) */}
-      {mode === 'mini' && (
+      {/* ================================================================= */}
+      {/* 2. STATE 2: MAXIMIZED GAMER HUD PANEL                             */}
+      {/* ================================================================= */}
+      {mode === 'maximized' && (
         <div
           className="anim-slice-in"
           style={{
             position: 'fixed',
-            left: `${miniPos.x}px`,
-            top: `${miniPos.y}px`,
-            width: `${miniSize.width}px`,
-            height: `${miniSize.height}px`,
-            background: `rgba(5, 6, 8, ${hudOpacityValue})`,
-            backdropFilter: opacity > 0 ? 'blur(16px)' : 'none',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            clipPath: 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)',
-            boxShadow: '0 8px 36px rgba(0, 0, 0, 0.85)',
+            left: `${panelPos.x}px`,
+            top: `${panelPos.y}px`,
+            width: `${panelSize.width}px`,
+            height: `${panelSize.height}px`,
+            // GHOST MODE: Only the chat background becomes transparent (0% - 100%)
+            background: `rgba(8, 10, 15, ${hudOpacityValue})`,
+            backdropFilter: opacity > 15 ? 'blur(16px)' : 'none',
+            border: `1.5px solid rgba(0, 240, 255, ${Math.max(0.2, hudOpacityValue)})`,
+            borderRadius: '12px',
+            boxShadow: '0 12px 48px rgba(0, 0, 0, 0.95)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
             pointerEvents: isClickThrough ? 'none' : 'auto',
           }}
         >
+          {/* Tactical Recoverable Touch Pill (Always interactive even in Pass-Through mode) */}
+          {isClickThrough && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                SoundEngine.playBladeTick();
+                toggleClickThrough();
+              }}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '48px',
+                background: '#F59E0B',
+                color: '#000000',
+                border: '1.5px solid #ffffff',
+                borderRadius: '14px',
+                padding: '4px 12px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                pointerEvents: 'auto',
+                zIndex: 100005,
+                boxShadow: '0 0 20px rgba(245, 158, 11, 0.9)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              title="Click here to restore touch control"
+            >
+              <span>⚡ PASS-THRU</span>
+              <span style={{ textDecoration: 'underline' }}>[RESTORE TOUCH]</span>
+            </button>
+          )}
+
           {/* Draggable Header (Solid background ensures controls are visible even when opacity is 0%) */}
           <div
-            onPointerDown={handleMiniDragStart}
-            onPointerMove={handleMiniDragMove}
-            onPointerUp={handleMiniDragEnd}
+            onPointerDown={handlePanelDragStart}
+            onPointerMove={handlePanelDragMove}
+            onPointerUp={handlePanelDragEnd}
             style={{
-              padding: '8px 12px',
+              padding: '10px 14px',
               borderBottom: '1px solid rgba(255, 255, 255, 0.16)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'rgba(12, 15, 20, 0.95)',
-              cursor: isDraggingMini ? 'grabbing' : 'grab',
+              background: 'rgba(12, 15, 22, 0.98)',
+              cursor: isDraggingPanel ? 'grabbing' : 'grab',
               userSelect: 'none',
               touchAction: 'none',
               pointerEvents: 'auto',
             }}
           >
+            {/* Header Sigil + Title */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <EmblemLogo size={20} />
+              <EmblemLogo size={22} />
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     fontFamily: 'var(--font-display)',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     letterSpacing: '0.12em',
                     color: '#ffffff',
                     fontWeight: 700,
@@ -375,162 +372,213 @@ export const FloatingOverlayHUD: React.FC = () => {
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {activeContact ? activeContact.alias.toUpperCase() : 'NO CHANNEL'}
+                  {channelDisplayTitle}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '9px',
+                    color: '#00F0FF',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  ● P2P MESH ACTIVE
                 </div>
               </div>
             </div>
 
+            {/* Header Controls (All buttons have pointerEvents: 'auto') */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', pointerEvents: 'auto' }}>
-              {/* Opacity Slider in Mini Mode */}
+              {/* Ghost Mode Opacity Slider (0% to 100%) */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  padding: '2px 6px',
-                  borderRadius: '2px',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: 'rgba(20, 25, 35, 0.95)',
+                  padding: '3px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
                 }}
-                title={`Transparency: ${opacity}% (0% to 100%)`}
+                title={`Ghost Mode Transparency: ${opacity}% (0% to 100%) - Only chat background fades!`}
               >
-                <IconGhostMode size={11} color="var(--text-silver)" />
+                <IconGhostMode size={12} color="#8892B0" />
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={opacity}
                   onChange={(e) => setOpacity(Number(e.target.value))}
-                  style={{ width: '42px', accentColor: '#ffffff', cursor: 'pointer' }}
+                  style={{ width: '48px', accentColor: '#00F0FF', cursor: 'pointer' }}
                 />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#ffffff' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#ffffff', minWidth: '24px' }}>
                   {opacity}%
                 </span>
               </div>
 
-              {/* Expand to Full Panel */}
+              {/* Pass-Through (Click-Through) Button */}
               <button
-                onClick={() => setMode('full')}
-                style={{
-                  background: 'var(--void-2)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: 'var(--text-silver)',
-                  cursor: 'pointer',
-                  padding: '3px 6px',
-                  fontSize: '10px',
-                  fontFamily: 'var(--font-mono)',
-                  borderRadius: '2px',
+                onClick={(e) => {
+                  e.stopPropagation();
+                  SoundEngine.playBladeTick();
+                  toggleClickThrough();
                 }}
-                title="Expand to Full Panel"
+                style={{
+                  padding: '4px 8px',
+                  background: isClickThrough ? 'rgba(245, 158, 11, 0.25)' : 'rgba(20, 25, 35, 0.95)',
+                  border: `1px solid ${isClickThrough ? '#F59E0B' : '#00F0FF'}`,
+                  color: isClickThrough ? '#F59E0B' : '#00F0FF',
+                  fontSize: '9.5px',
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  pointerEvents: 'auto',
+                }}
+                title={isClickThrough ? 'Pass-Through active (clicks pass through to game)' : 'Activate Pass-Through (clicks pass to underlying game)'}
               >
-                FULL
+                <IconClickThrough size={11} />
+                <span>{isClickThrough ? 'PASS-THRU' : 'TOUCH'}</span>
               </button>
 
-              {/* Minimize to Bubble */}
+              {/* Minimize to Bubble Button ("MIN") */}
               <button
                 onClick={() => {
                   SoundEngine.playBladeTick();
-                  setMode('bubble');
+                  setMode('minimized');
                 }}
                 style={{
-                  background: 'var(--void-2)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: 'var(--text-silver)',
+                  background: 'rgba(26, 32, 44, 0.95)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  color: '#CBD5E1',
                   cursor: 'pointer',
-                  padding: '3px 6px',
-                  fontSize: '10px',
+                  padding: '4px 8px',
+                  fontSize: '9.5px',
                   fontFamily: 'var(--font-mono)',
-                  borderRadius: '2px',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  pointerEvents: 'auto',
                 }}
-                title="Minimize to Floating Sigil"
+                title="Minimize to Floating Sigil Bubble"
               >
-                BUBBLE
+                MIN
               </button>
 
-              {/* Exit Overlay to Dashboard */}
+              {/* Close Overlay ("✕") */}
               <button
                 onClick={() => {
                   SoundEngine.playBladeTick();
                   toggleOverlay();
                 }}
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
+                  background: 'rgba(38, 20, 24, 0.95)',
+                  border: '1px solid rgba(244, 63, 94, 0.4)',
+                  color: '#F43F5E',
                   cursor: 'pointer',
-                  padding: '4px',
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  borderRadius: '4px',
+                  pointerEvents: 'auto',
                 }}
                 title="Exit Overlay to Dashboard"
               >
-                <IconClose size={13} color="var(--status-error)" />
+                ✕
               </button>
             </div>
           </div>
 
-          {/* Messages Stream (Last 3) */}
+          {/* Messages Stream (Scrollable with solid, readable cards) */}
           <div
             style={{
               flex: 1,
-              padding: '10px 12px',
+              padding: '12px 14px',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px',
+              gap: '8px',
             }}
           >
-            {activeContact && messages.length > 0 ? (
-              messages.slice(-3).map((msg) => (
+            {isGroupActive && groupMessages.length > 0 ? (
+              groupMessages.slice(-20).map((msg) => (
                 <div
                   key={msg.id}
                   style={{
-                    padding: '8px 10px',
-                    background: msg.senderPubkey === activeContact.pubkey ? 'rgba(20, 24, 32, 0.88)' : 'rgba(32, 38, 48, 0.92)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '2px',
+                    padding: '8px 12px',
+                    background: msg.authorAlias === 'You' ? 'rgba(30, 39, 56, 0.92)' : 'rgba(19, 23, 34, 0.90)',
+                    border: `1px solid ${msg.authorAlias === 'You' ? '#00F0FF' : 'rgba(255, 255, 255, 0.18)'}`,
+                    borderRadius: '4px',
                     fontSize: '12px',
                     color: '#ffffff',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    alignSelf: msg.authorAlias === 'You' ? 'flex-end' : 'flex-start',
+                    maxWidth: '85%',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
                   }}
                 >
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
+                  <div style={{ fontSize: '9.5px', color: msg.authorAlias === 'You' ? '#00F0FF' : '#94A3B8', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
+                    {msg.authorAlias || msg.senderTag || 'Teammate'}
+                  </div>
+                  {msg.content}
+                </div>
+              ))
+            ) : activeContact && directMessages.length > 0 ? (
+              directMessages.slice(-20).map((msg) => (
+                <div
+                  key={msg.id}
+                  style={{
+                    padding: '8px 12px',
+                    background: msg.senderPubkey === activeContact.pubkey ? 'rgba(19, 23, 34, 0.90)' : 'rgba(30, 39, 56, 0.92)',
+                    border: `1px solid ${msg.senderPubkey === activeContact.pubkey ? 'rgba(255, 255, 255, 0.18)' : '#00F0FF'}`,
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    color: '#ffffff',
+                    alignSelf: msg.senderPubkey === activeContact.pubkey ? 'flex-start' : 'flex-end',
+                    maxWidth: '85%',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  <div style={{ fontSize: '9.5px', color: msg.senderPubkey === activeContact.pubkey ? '#94A3B8' : '#00F0FF', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
                     {msg.senderPubkey === activeContact.pubkey ? activeContact.alias : 'You'}
                   </div>
                   {msg.content}
                 </div>
               ))
             ) : (
-              <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-silver)', fontSize: '11px', fontFamily: 'var(--font-mono)', background: 'rgba(12, 14, 18, 0.6)', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                NO RECENT SIGNALS
+              <div style={{ padding: '32px 16px', textAlign: 'center', color: '#64748B', fontSize: '11px', fontFamily: 'var(--font-mono)', background: 'rgba(12, 15, 22, 0.5)', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '4px' }}>
+                WAITING FOR SIGNALS // P2P MESH CONNECTED
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Quick Reply Bar (Opaque background so user can type even when window is transparent) */}
           <form
             onSubmit={handleSendQuickReply}
             style={{
-              padding: '8px 10px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.14)',
+              padding: '8px 12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.16)',
               display: 'flex',
               gap: '6px',
-              background: 'rgba(12, 15, 20, 0.95)',
+              background: 'rgba(12, 15, 22, 0.98)',
               pointerEvents: 'auto',
             }}
           >
             <input
               type="text"
-              placeholder={activeContact ? 'Quick reply...' : 'Select contact...'}
+              placeholder={activeContact ? 'Quick callout...' : 'Select contact...'}
               value={replyText}
               disabled={!activeContact}
               onChange={(e) => setReplyText(e.target.value)}
               style={{
                 flex: 1,
-                background: 'var(--void-0)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
+                background: 'rgba(4, 6, 9, 0.9)',
+                border: '1px solid rgba(255, 255, 255, 0.22)',
                 color: '#ffffff',
                 fontSize: '12px',
-                padding: '6px 10px',
-                borderRadius: '2px',
+                padding: '7px 10px',
+                borderRadius: '4px',
                 outline: 'none',
               }}
             />
@@ -540,17 +588,17 @@ export const FloatingOverlayHUD: React.FC = () => {
               type="submit"
               disabled={!activeContact || !replyText.trim()}
               icon={<IconBladeSend size={11} color="#000" />}
-              style={{ minHeight: '30px', padding: '0 10px', fontSize: '10px' }}
+              style={{ minHeight: '32px', padding: '0 12px', fontSize: '10px', background: '#00F0FF', color: '#000000', fontWeight: 'bold' }}
             >
               SEND
             </ChromeButton>
           </form>
 
-          {/* Tactical Diagonal Resize Grip */}
+          {/* Tactical Resize Grip */}
           <div
-            onPointerDown={handleMiniResizeStart}
-            onPointerMove={handleMiniResizeMove}
-            onPointerUp={handleMiniResizeEnd}
+            onPointerDown={handlePanelResizeStart}
+            onPointerMove={handlePanelResizeMove}
+            onPointerUp={handlePanelResizeEnd}
             style={{
               position: 'absolute',
               bottom: 0,
@@ -563,305 +611,15 @@ export const FloatingOverlayHUD: React.FC = () => {
               justifyContent: 'center',
               touchAction: 'none',
               pointerEvents: 'auto',
-              background: 'rgba(255, 255, 255, 0.08)',
-              borderTopLeftRadius: '3px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              borderTopLeftRadius: '4px',
               zIndex: 10,
             }}
-            title="Drag to resize mini window"
+            title="Drag to resize HUD window"
           >
             <svg width="8" height="8" viewBox="0 0 8 8">
               <line x1="7" y1="1" x2="1" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
               <line x1="7" y1="4" x2="4" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-          </div>
-        </div>
-      )}
-
-      {/* 3. FULL OVERLAY PANEL (Moveable + Resizable + Transparency to 0% + Recoverable Touch) */}
-      {mode === 'full' && (
-        <div
-          className="anim-slice-in"
-          style={{
-            position: 'fixed',
-            left: `${fullPos.x}px`,
-            top: `${fullPos.y}px`,
-            width: `${fullSize.width}px`,
-            height: `${fullSize.height}px`,
-            background: `rgba(5, 6, 8, ${hudOpacityValue})`,
-            backdropFilter: opacity > 0 ? 'blur(20px)' : 'none',
-            border: '1px solid rgba(255, 255, 255, 0.32)',
-            clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
-            boxShadow: '0 12px 48px rgba(0, 0, 0, 0.95)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            pointerEvents: isClickThrough ? 'none' : 'auto',
-          }}
-        >
-          {/* Floating Recoverable Touch Button (Always interactive even in pass-thru mode) */}
-          {isClickThrough && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                SoundEngine.playBladeTick();
-                toggleClickThrough();
-              }}
-              style={{
-                position: 'absolute',
-                top: '6px',
-                right: '48px',
-                background: 'rgba(245, 158, 11, 0.95)',
-                color: '#000000',
-                border: '1px solid #ffffff',
-                borderRadius: '2px',
-                padding: '4px 10px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                pointerEvents: 'auto',
-                zIndex: 100001,
-                boxShadow: '0 0 16px rgba(245, 158, 11, 0.9)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-              title="Click here to restore touch control"
-            >
-              <span>⚡ PASS-THRU ON</span>
-              <span style={{ textDecoration: 'underline' }}>[RESTORE TOUCH]</span>
-            </button>
-          )}
-
-          {/* Draggable Header (Solid background ensures controls are visible even when opacity is 0%) */}
-          <div
-            onPointerDown={handleFullDragStart}
-            onPointerMove={handleFullDragMove}
-            onPointerUp={handleFullDragEnd}
-            style={{
-              padding: '10px 14px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.16)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'rgba(12, 15, 20, 0.95)',
-              cursor: isDraggingFull ? 'grabbing' : 'grab',
-              userSelect: 'none',
-              touchAction: 'none',
-              pointerEvents: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <EmblemLogo size={26} />
-              <div>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: '13px',
-                    letterSpacing: '0.18em',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                  }}
-                >
-                  ZENYTH HUD
-                </div>
-                <div className="tracked-micro" style={{ fontSize: '9px' }}>
-                  ALWAYS-ON-TOP DUELING PANEL
-                </div>
-              </div>
-            </div>
-
-            {/* Controls (All buttons have pointerEvents: 'auto' so they can be clicked even in touch-through) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'auto' }}>
-              {/* Opacity Slider (0% to 100%) */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  padding: '3px 8px',
-                  borderRadius: '2px',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                }}
-                title={`Transparency: ${opacity}% (0% to 100%)`}
-              >
-                <IconGhostMode size={13} color="var(--text-silver)" />
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={opacity}
-                  onChange={(e) => setOpacity(Number(e.target.value))}
-                  style={{ width: '56px', accentColor: '#ffffff', cursor: 'pointer' }}
-                />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#ffffff' }}>
-                  {opacity}%
-                </span>
-              </div>
-
-              {/* Click-Through Mode Toggle (Always touchable) */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  SoundEngine.playBladeTick();
-                  toggleClickThrough();
-                }}
-                style={{
-                  padding: '4px 8px',
-                  background: isClickThrough ? 'rgba(245, 158, 11, 0.3)' : 'var(--void-2)',
-                  border: `1px solid ${isClickThrough ? 'var(--status-warning)' : 'rgba(255, 255, 255, 0.22)'}`,
-                  color: isClickThrough ? 'var(--status-warning)' : 'var(--text-silver)',
-                  fontSize: '10px',
-                  fontFamily: 'var(--font-mono)',
-                  cursor: 'pointer',
-                  borderRadius: '2px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  pointerEvents: 'auto',
-                }}
-                title={isClickThrough ? 'Click to restore normal touches' : 'When active, clicks pass through window to underlying game'}
-              >
-                <IconClickThrough size={11} />
-                <span>{isClickThrough ? 'PASS-THRU' : 'TOUCH ON'}</span>
-              </button>
-
-              {/* Minimize to Mini */}
-              <button
-                onClick={() => setMode('mini')}
-                style={{
-                  background: 'var(--void-2)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: 'var(--text-silver)',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
-                  fontSize: '10px',
-                  fontFamily: 'var(--font-mono)',
-                  borderRadius: '2px',
-                  pointerEvents: 'auto',
-                }}
-              >
-                MINI
-              </button>
-
-              {/* Close Overlay */}
-              <button
-                onClick={() => toggleOverlay()}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  pointerEvents: 'auto',
-                }}
-                title="Close Overlay"
-              >
-                <IconClose size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Full Conversation Thread */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '12px 16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '6px',
-            }}
-          >
-            {activeContact && messages.length > 0 ? (
-              messages.map((msg) => (
-                <div key={msg.id} style={{ background: 'rgba(16, 20, 26, 0.85)', borderRadius: '2px', padding: '2px' }}>
-                  <MessageBubble
-                    id={msg.id}
-                    content={msg.content}
-                    timestamp={msg.timestamp}
-                    isSelf={msg.senderPubkey !== activeContact.pubkey}
-                    senderName={msg.senderPubkey === activeContact.pubkey ? activeContact.alias : undefined}
-                    senderTag={msg.senderPubkey === activeContact.pubkey ? activeContact.tag : undefined}
-                    status={msg.status}
-                  />
-                </div>
-              ))
-            ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-silver)', fontSize: '12px', fontFamily: 'var(--font-mono)', background: 'rgba(12, 14, 18, 0.5)' }}>
-                NO MESSAGES YET
-              </div>
-            )}
-          </div>
-
-          {/* Full Input Bar (Opaque background so user can type even when window is transparent) */}
-          <form
-            onSubmit={handleSendQuickReply}
-            style={{
-              padding: '10px 14px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.16)',
-              display: 'flex',
-              gap: '8px',
-              background: 'rgba(12, 15, 20, 0.95)',
-              pointerEvents: 'auto',
-            }}
-          >
-            <input
-              type="text"
-              placeholder={activeContact ? `Message ${activeContact.alias}...` : 'Select or start a private chat first...'}
-              value={replyText}
-              disabled={!activeContact}
-              onChange={(e) => setReplyText(e.target.value)}
-              style={{
-                flex: 1,
-                background: 'var(--void-1)',
-                border: '1px solid rgba(255, 255, 255, 0.22)',
-                color: '#ffffff',
-                fontSize: '13px',
-                padding: '8px 12px',
-                borderRadius: '2px',
-                outline: 'none',
-              }}
-            />
-            <ChromeButton
-              variant="solid"
-              size="md"
-              type="submit"
-              disabled={!activeContact || !replyText.trim()}
-              icon={<IconBladeSend size={13} color="#000" />}
-              style={{ height: '38px', minHeight: '38px', padding: '0 14px' }}
-            >
-              SEND
-            </ChromeButton>
-          </form>
-
-          {/* Tactical Diagonal Resize Grip */}
-          <div
-            onPointerDown={handleFullResizeStart}
-            onPointerMove={handleFullResizeMove}
-            onPointerUp={handleFullResizeEnd}
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              width: '18px',
-              height: '18px',
-              cursor: 'nwse-resize',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              touchAction: 'none',
-              pointerEvents: 'auto',
-              background: 'rgba(255, 255, 255, 0.08)',
-              borderTopLeftRadius: '3px',
-              zIndex: 10,
-            }}
-            title="Drag to resize full panel"
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <line x1="9" y1="1" x2="1" y2="9" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-              <line x1="9" y1="5" x2="5" y2="9" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
           </div>
         </div>

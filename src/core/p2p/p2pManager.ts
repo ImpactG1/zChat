@@ -2,6 +2,7 @@ import { P2PPeer, P2PMessage, SignalingPayload, SquadRoomState } from './types';
 import { SignalingService } from './signaling';
 import { UserIdentity } from '@/types';
 import { db } from '../storage/db';
+import { syncOverlayChat } from '@/bridge/overlayChatSync';
 
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
@@ -198,6 +199,9 @@ export class P2PManager {
         authorAlias: this.myTag,
       });
     } catch {}
+
+    // Trigger overlay HUD update
+    syncOverlayChat().catch(() => {});
 
     // Emit locally to UI listeners
     for (const listener of this.onMessageListeners) {
@@ -482,6 +486,9 @@ export class P2PManager {
               authorAlias: message.senderTag,
             });
           } catch {}
+
+          // Dynamically push incoming P2P message to overlay HUD
+          syncOverlayChat().catch(() => {});
 
           // Notify UI listeners
           for (const listener of this.onMessageListeners) {

@@ -3,6 +3,7 @@ import { OverlayConfig } from '@/types';
 import { OverlayBridge } from '@/bridge/overlayBridge';
 import { db } from '@/core/storage/db';
 import { sendDirectMessage } from '@/core/nostr/messageSender';
+import { syncOverlayChat } from '@/bridge/overlayChatSync';
 
 interface OverlayState extends OverlayConfig {
   hasPermission: boolean;
@@ -77,10 +78,14 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
           if (contact) {
             await sendDirectMessage(contact.pubkey, text);
           }
+          await syncOverlayChat();
         } catch (err) {
           console.error('Failed to send direct message from overlay listener:', err);
         }
       });
+
+      // Synchronize full messages history immediately
+      await syncOverlayChat();
 
       set({ isEnabled: true });
     } else {

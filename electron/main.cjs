@@ -66,9 +66,10 @@ ipcMain.on('window-toggle-pin', (event, isPinned) => {
 });
 
 ipcMain.on('window-set-opacity', (event, opacityPercent) => {
+  // Ghost mode transparency is handled at DOM background level (rgba)
+  // Native window surface stays solid 1.0 so headers, text, and buttons stay 100% crisp & readable
   if (mainWindow) {
-    const val = Math.max(15, Math.min(100, opacityPercent)) / 100;
-    mainWindow.setOpacity(val);
+    mainWindow.setOpacity(1.0);
   }
 });
 

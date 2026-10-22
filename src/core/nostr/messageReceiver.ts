@@ -3,6 +3,7 @@ import { db } from '../storage/db';
 import { KeyVault } from '../storage/keyVault';
 import { nostrClient } from './client';
 import { ChatMessage } from '@/types';
+import { syncOverlayChat } from '@/bridge/overlayChatSync';
 import type { Event as NostrEvent } from 'nostr-tools';
 
 export type OnNewMessageCallback = (msg: ChatMessage) => void;
@@ -133,6 +134,9 @@ class MessageReceiverService {
           isBlocked: false,
         });
       }
+
+      // Trigger dynamic overlay sync immediately for always-on-top HUD
+      syncOverlayChat().catch(() => {});
 
       // 5. Notify in-app subscribers
       this.listeners.forEach((listener) => {

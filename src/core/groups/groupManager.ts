@@ -4,6 +4,7 @@ import { KeyVault } from '../storage/keyVault';
 import { sendDirectMessage } from '../nostr/messageSender';
 import { nostrClient } from '../nostr/client';
 import { GroupChat, GroupMessage } from '@/types';
+import { syncOverlayChat } from '@/bridge/overlayChatSync';
 import { finalizeEvent } from 'nostr-tools';
 import { hexToBytes } from '@noble/hashes/utils';
 
@@ -86,6 +87,7 @@ export class GroupManager {
       lastMessage: content,
       lastTimestamp: now,
     });
+    syncOverlayChat().catch(() => {});
 
     // Nostr Kind 42 (Channel Message) or Kind 9002 (Encrypted Group Message)
     const eventTemplate = {
@@ -147,6 +149,7 @@ export class GroupManager {
         lastTimestamp: message.timestamp,
         unreadCount: group.unreadCount + 1,
       });
+      syncOverlayChat().catch(() => {});
     } catch (err) {
       console.warn('Failed to decrypt group message:', err);
     }

@@ -1,7 +1,12 @@
 {
   "name": "zchat",
-  "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-beta",
+  "description": "Serverless, End-to-End Encrypted Gamer Chat with In-Game Always-On-Top HUD Overlay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ImpactG1/zChat.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

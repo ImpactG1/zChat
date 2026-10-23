@@ -126,7 +126,7 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
             const c = memberContacts.find((mc) => mc.pubkey === pk);
             return {
               pubkey: pk,
-              alias: c?.alias || `MEMBER#${pk.slice(0, 4)}`,
+              alias: c?.alias || `Warrior#${pk.slice(0, 4)}`,
               tag: c?.tag || `#${pk.slice(0, 4)}`,
               role: selectedGroup.adminPubkey === pk ? 'GROUP ADMIN' : 'MEMBER',
               ping: 'VERIFIED',

@@ -19,6 +19,7 @@ export const SeedBackupModal: React.FC<SeedBackupModalProps> = ({ onClose }) => 
   const { identity, logout } = useAuthStore();
   const [copiedSeed, setCopiedSeed] = useState(false);
   const [copiedNpub, setCopiedNpub] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
 
   if (!identity) return null;
@@ -38,6 +39,13 @@ export const SeedBackupModal: React.FC<SeedBackupModalProps> = ({ onClose }) => 
     SoundEngine.playBladeTick();
     setCopiedNpub(true);
     setTimeout(() => setCopiedNpub(false), 2000);
+  };
+
+  const copyInvite = () => {
+    navigator.clipboard.writeText(`${identity.displayName}: ${identity.npub}`);
+    SoundEngine.playBladeTick();
+    setCopiedInvite(true);
+    setTimeout(() => setCopiedInvite(false), 2000);
   };
 
   return (
@@ -131,10 +139,10 @@ export const SeedBackupModal: React.FC<SeedBackupModalProps> = ({ onClose }) => 
               }}
             />
             <button
-              onClick={copyNpub}
+              onClick={copyInvite}
               style={{
                 background: 'var(--void-3)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
+                border: '1px solid rgba(255, 255, 255, 0.28)',
                 color: '#ffffff',
                 padding: '6px 10px',
                 fontFamily: 'var(--font-display)',
@@ -145,9 +153,30 @@ export const SeedBackupModal: React.FC<SeedBackupModalProps> = ({ onClose }) => 
                 alignItems: 'center',
                 gap: '4px',
               }}
+              title="Copy warrior name & covenant key to share with friends"
             >
               <IconCopyBlade size={11} />
-              <span>{copiedNpub ? 'COPIED' : 'COPY'}</span>
+              <span>{copiedInvite ? 'COPIED' : 'INVITE'}</span>
+            </button>
+            <button
+              onClick={copyNpub}
+              style={{
+                background: 'var(--void-3)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: 'var(--text-silver)',
+                padding: '6px 10px',
+                fontFamily: 'var(--font-display)',
+                fontSize: '10px',
+                letterSpacing: '0.12em',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Copy raw npub key"
+            >
+              <IconCopyBlade size={11} />
+              <span>{copiedNpub ? 'COPIED' : 'KEY'}</span>
             </button>
           </div>
         </div>

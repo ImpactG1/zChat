@@ -45,7 +45,7 @@ export class P2PManager {
 
   public initUser(identity: UserIdentity): void {
     this.myId = identity.pubkey.slice(0, 16);
-    this.myTag = identity.displayName || 'Gamer';
+    this.myTag = identity.displayName || 'Warrior';
     this.myPubkey = identity.pubkey;
     if (this.signaling) {
       this.signaling.disconnect();
@@ -528,12 +528,20 @@ export class P2PManager {
         await db.contacts.put({
           pubkey,
           npub: '',
-          alias,
+          alias: alias || `Warrior#${pubkey.slice(0, 4)}`,
           tag: `#${pubkey.slice(0, 4)}`,
           unreadCount: 0,
           isBlocked: false,
           lastTimestamp: Date.now(),
         });
+      } else if (
+        alias &&
+        (!existing.alias ||
+          existing.alias.startsWith('User#') ||
+          existing.alias.startsWith('MEMBER#') ||
+          existing.alias.startsWith('Warrior#'))
+      ) {
+        await db.contacts.update(pubkey, { alias });
       }
     } catch {}
   }

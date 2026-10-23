@@ -42,7 +42,7 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
         })),
         ...contacts.map((c) => ({
           pubkey: c.pubkey,
-          alias: c.alias || `User#${c.pubkey.slice(0, 4)}`,
+          alias: c.alias || `Warrior#${c.pubkey.slice(0, 4)}`,
           tag: c.tag || `#${c.pubkey.slice(0, 4)}`,
           unreadCount: c.unreadCount || 0,
           lastTimestamp: c.lastTimestamp || 0,

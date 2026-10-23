@@ -4,6 +4,7 @@ import { KeyVault } from '../storage/keyVault';
 import { nostrClient } from './client';
 import { ChatMessage } from '@/types';
 import { syncOverlayChat } from '@/bridge/overlayChatSync';
+import { profileService } from './profileService';
 import type { Event as NostrEvent } from 'nostr-tools';
 
 export type OnNewMessageCallback = (msg: ChatMessage) => void;
@@ -115,24 +116,47 @@ class MessageReceiverService {
       // 3. Save to database
       await db.messages.put(message);
 
-      // 4. Update or create contact record
+      // 4. Update or create contact record using the sender's true warrior title
+      const senderWarriorName = unwrapped.senderName?.trim();
+      const senderWarriorTag = unwrapped.senderTag?.trim() || `#${unwrapped.senderPubkey.slice(0, 4)}`;
+
       if (contact) {
+        const isPlaceholder =
+          !contact.alias ||
+          contact.alias.startsWith('User#') ||
+          contact.alias.startsWith('Warrior#') ||
+          contact.alias.startsWith('Viper#') ||
+          contact.alias.startsWith('MEMBER#');
+
+        const finalAlias = senderWarriorName && isPlaceholder ? senderWarriorName : contact.alias;
+        const finalTag = senderWarriorTag && (!contact.tag || contact.tag === `#${contact.pubkey.slice(0, 4)}`)
+          ? senderWarriorTag
+          : contact.tag;
+
         await db.contacts.update(unwrapped.senderPubkey, {
           lastMessage: unwrapped.content,
           lastTimestamp: message.timestamp,
           unreadCount: contact.unreadCount + 1,
+          alias: finalAlias,
+          tag: finalTag,
         });
       } else {
+        // Unknown user sending message: Store with their warrior title by default!
+        const initialAlias = senderWarriorName || `Warrior#${unwrapped.senderPubkey.slice(0, 4)}`;
         await db.contacts.put({
           pubkey: unwrapped.senderPubkey,
           npub: '',
-          alias: `User#${unwrapped.senderPubkey.slice(0, 4)}`,
-          tag: `#${unwrapped.senderPubkey.slice(0, 4)}`,
+          alias: initialAlias,
+          tag: senderWarriorTag,
           unreadCount: 1,
           lastMessage: unwrapped.content,
           lastTimestamp: message.timestamp,
           isBlocked: false,
         });
+
+        if (!senderWarriorName) {
+          profileService.fetchWarriorProfile(unwrapped.senderPubkey).catch(() => {});
+        }
       }
 
       // Trigger dynamic overlay sync immediately for always-on-top HUD

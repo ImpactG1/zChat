@@ -972,7 +972,7 @@ class FloatingBubbleView(
                 } else {
                     for (i in 0 until array.length()) {
                         val obj = array.getJSONObject(i)
-                        val senderName = obj.optString("senderName", obj.optString("authorAlias", "User"))
+                        val senderName = obj.optString("senderName", obj.optString("authorAlias", "Warrior"))
                         val senderTag = obj.optString("senderTag", "")
                         val content = obj.optString("content", "")
                         val isMe = obj.optBoolean("isMe", false)

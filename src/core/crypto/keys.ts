@@ -79,16 +79,22 @@ export function identityFromPrivateKey(privkey: string, displayName: string = 'G
 }
 
 /**
- * Parses user input (npub or 64-char hex) and returns standard 64-char hex pubkey
+ * Parses user input (npub, nostr:npub, invite text, or 64-char hex) and returns standard 64-char hex pubkey
  */
 export function parsePubkeyInput(input: string): string | null {
+  if (!input) return null;
   const cleaned = input.trim();
+
+  // 1. Direct 64-character hex
   if (/^[0-9a-fA-F]{64}$/.test(cleaned)) {
     return cleaned.toLowerCase();
   }
-  if (cleaned.startsWith('npub1')) {
+
+  // 2. Check for npub in string (supports raw npub, nostr:npub1..., "Name: npub1...", etc.)
+  const npubMatch = cleaned.match(/(?:nostr:)?(npub1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58,})/i);
+  if (npubMatch) {
     try {
-      const decoded = nip19.decode(cleaned);
+      const decoded = nip19.decode(npubMatch[1].toLowerCase());
       if (decoded.type === 'npub') {
         return decoded.data as string;
       }
@@ -96,5 +102,48 @@ export function parsePubkeyInput(input: string): string | null {
       return null;
     }
   }
+
+  // 3. Check for pubkey query parameter in invite URLs (e.g. zchat://invite?pubkey=...)
+  const hexMatch = cleaned.match(/[?&]pubkey=([0-9a-fA-F]{64})/i);
+  if (hexMatch) {
+    return hexMatch[1].toLowerCase();
+  }
+
   return null;
+}
+
+/**
+ * Parses user input to extract both the 64-char pubkey and any suggested warrior title
+ * e.g. "Viper: npub1..." -> { pubkey: "...", suggestedAlias: "Viper" }
+ */
+export function parsePubkeyAndAlias(input: string): { pubkey: string | null; suggestedAlias?: string } {
+  const pubkey = parsePubkeyInput(input);
+  if (!pubkey) return { pubkey: null };
+
+  let suggestedAlias: string | undefined = undefined;
+  const trimmed = input.trim();
+
+  // Case A: "Name: npub1..."
+  if (trimmed.includes(':')) {
+    const prefix = trimmed.split(':')[0].trim();
+    if (prefix && !prefix.toLowerCase().startsWith('nostr') && !prefix.toLowerCase().startsWith('http') && !prefix.toLowerCase().startsWith('zchat')) {
+      suggestedAlias = prefix;
+    }
+  }
+  // Case B: "Name (npub1...)"
+  else if (trimmed.includes('(') && trimmed.includes(')')) {
+    const match = trimmed.match(/^([^(]+)\s*\(/);
+    if (match && match[1].trim()) {
+      suggestedAlias = match[1].trim();
+    }
+  }
+  // Case C: URL param "name=Viper"
+  else if (trimmed.includes('name=')) {
+    const match = trimmed.match(/[?&]name=([^&#]+)/);
+    if (match) {
+      suggestedAlias = decodeURIComponent(match[1]).trim();
+    }
+  }
+
+  return { pubkey, suggestedAlias };
 }

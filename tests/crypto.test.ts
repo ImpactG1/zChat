@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createNewIdentity, restoreIdentityFromMnemonic, parsePubkeyInput } from '../src/core/crypto/keys';
+import { createNewIdentity, restoreIdentityFromMnemonic, parsePubkeyInput, parsePubkeyAndAlias } from '../src/core/crypto/keys';
 import { encryptDirect, decryptDirect } from '../src/core/crypto/nip44';
 import { wrapDirectMessage, unwrapDirectMessage } from '../src/core/crypto/nip59';
 
@@ -23,7 +23,16 @@ describe('zChat Cryptographic Engine', () => {
     const user = createNewIdentity('Phoenix');
     expect(parsePubkeyInput(user.pubkey)).toBe(user.pubkey);
     expect(parsePubkeyInput(user.npub)).toBe(user.pubkey);
+    expect(parsePubkeyInput(`nostr:${user.npub}`)).toBe(user.pubkey);
+    expect(parsePubkeyInput(`Phoenix: ${user.npub}`)).toBe(user.pubkey);
     expect(parsePubkeyInput('invalid_key')).toBeNull();
+  });
+
+  it('correctly extracts warrior title and pubkey from warrior covenant invites', () => {
+    const user = createNewIdentity('Viper');
+    const { pubkey, suggestedAlias } = parsePubkeyAndAlias(`Viper: ${user.npub}`);
+    expect(pubkey).toBe(user.pubkey);
+    expect(suggestedAlias).toBe('Viper');
   });
 
   it('performs authenticated NIP-44 v2 payload encryption and decryption', () => {
@@ -59,5 +68,21 @@ describe('zChat Cryptographic Engine', () => {
     const unwrapped = unwrapDirectMessage(giftWrap, bob.privkey);
     expect(unwrapped.content).toBe(originalText);
     expect(unwrapped.senderPubkey).toBe(alice.pubkey);
+  });
+
+  it('securely carries sender warrior name and tag inside NIP-59 E2EE seal', () => {
+    const viper = createNewIdentity('Viper');
+    const ghost = createNewIdentity('Ghost');
+    const text = 'Cover the flank at sector 4!';
+
+    // Viper wraps message including warrior name and tag
+    const wrap = wrapDirectMessage(text, viper.privkey, ghost.pubkey, viper.displayName, viper.tag);
+
+    // Ghost unwraps and extracts sender's warrior identity
+    const unwrapped = unwrapDirectMessage(wrap, ghost.privkey);
+    expect(unwrapped.content).toBe(text);
+    expect(unwrapped.senderPubkey).toBe(viper.pubkey);
+    expect(unwrapped.senderName).toBe('Viper');
+    expect(unwrapped.senderTag).toBe(viper.tag);
   });
 });

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/core/storage/db';
 import { Contact } from '@/types';
-import { parsePubkeyInput } from '@/core/crypto/keys';
+import { parsePubkeyAndAlias } from '@/core/crypto/keys';
+import { profileService } from '@/core/nostr/profileService';
 import { useP2PStore } from '@/stores/useP2PStore';
 import { GroupManager } from '@/core/groups/groupManager';
 import { HostSquadModal } from '@/components/p2p/HostSquadModal';
@@ -78,13 +79,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
-    const hexPubkey = parsePubkeyInput(newKeyInput);
+    const { pubkey: hexPubkey, suggestedAlias } = parsePubkeyAndAlias(newKeyInput);
     if (!hexPubkey) {
       setErrorMsg('Invalid public key (must be 64-char hex or npub1...)');
       return;
     }
 
-    const alias = newAliasInput.trim() || `Viper#${hexPubkey.slice(0, 4)}`;
+    const alias = newAliasInput.trim() || suggestedAlias || `Warrior#${hexPubkey.slice(0, 4)}`;
     const newContact: Contact = {
       pubkey: hexPubkey,
       npub: '',
@@ -96,6 +97,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     };
 
     await db.contacts.put(newContact);
+    profileService.fetchWarriorProfile(hexPubkey).catch(() => {});
     SoundEngine.playSealChime();
     setShowAddContactModal(false);
     setNewKeyInput('');
@@ -707,17 +709,31 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <BladeInput
               label="FRIEND'S PUBLIC KEY (NPUB OR HEX)"
               value={newKeyInput}
-              onChange={(e) => setNewKeyInput(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setNewKeyInput(val);
+                const { pubkey, suggestedAlias } = parsePubkeyAndAlias(val);
+                if (suggestedAlias && !newAliasInput) {
+                  setNewAliasInput(suggestedAlias);
+                }
+                if (pubkey && !newAliasInput && !suggestedAlias) {
+                  profileService.fetchWarriorProfile(pubkey).then((res) => {
+                    if (res?.name && !newAliasInput) {
+                      setNewAliasInput(res.name);
+                    }
+                  });
+                }
+              }}
               placeholder="npub1... or hex key"
               required
               autoFocus
             />
 
             <BladeInput
-              label="NICKNAME / NAME"
+              label="WARRIOR TITLE / NAME"
               value={newAliasInput}
               onChange={(e) => setNewAliasInput(e.target.value)}
-              placeholder="e.g. Alex"
+              placeholder="e.g. Viper, Ghost"
             />
 
             {errorMsg && (

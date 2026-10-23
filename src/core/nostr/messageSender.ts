@@ -4,6 +4,7 @@ import { KeyVault } from '../storage/keyVault';
 import { nostrClient } from './client';
 import { ChatMessage, OutboxItem } from '@/types';
 import { syncOverlayChat } from '@/bridge/overlayChatSync';
+import { profileService } from './profileService';
 
 /**
  * Sends a NIP-17 Gift-Wrapped message to a recipient pubkey
@@ -43,19 +44,26 @@ export async function sendDirectMessage(recipientPubkey: string, content: string
     await db.contacts.put({
       pubkey: recipientPubkey,
       npub: '',
-      alias: `User#${recipientPubkey.slice(0, 4)}`,
+      alias: `Warrior#${recipientPubkey.slice(0, 4)}`,
       tag: `#${recipientPubkey.slice(0, 4)}`,
       unreadCount: 0,
       lastMessage: content,
       lastTimestamp: now,
       isBlocked: false,
     });
+    profileService.fetchWarriorProfile(recipientPubkey).catch(() => {});
   }
 
-  // 3. Wrap with NIP-59 (Rumor -> Seal -> Gift Wrap)
+  // 3. Wrap with NIP-59 (Rumor -> Seal -> Gift Wrap) with sender's warrior handle & tag
   let giftWrapEvent;
   try {
-    giftWrapEvent = wrapDirectMessage(content, identity.privkey, recipientPubkey);
+    giftWrapEvent = wrapDirectMessage(
+      content,
+      identity.privkey,
+      recipientPubkey,
+      identity.displayName,
+      identity.tag
+    );
   } catch (err) {
     console.error('Failed to wrap message:', err);
     await db.messages.update(messageId, { status: 'failed' });

@@ -3,6 +3,7 @@ import { UserIdentity } from '@/types';
 import { KeyVault } from '@/core/storage/keyVault';
 import { createNewIdentity, restoreIdentityFromMnemonic } from '@/core/crypto/keys';
 import { messageReceiver } from '@/core/nostr/messageReceiver';
+import { profileService } from '@/core/nostr/profileService';
 
 interface AuthState {
   identity: UserIdentity | null;
@@ -23,6 +24,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ identity: existing, isInitialized: true });
     if (existing) {
       messageReceiver.startListening();
+      // Publish Kind 0 profile so relays have latest warrior handle and migrate any old placeholders
+      profileService.publishWarriorProfile(existing).catch(() => {});
+      profileService.migratePlaceholderContacts().catch(() => {});
     }
   },
 
@@ -31,6 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     KeyVault.saveIdentity(newIdentity);
     set({ identity: newIdentity });
     messageReceiver.startListening();
+    profileService.publishWarriorProfile(newIdentity).catch(() => {});
     return newIdentity;
   },
 
@@ -38,6 +43,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     KeyVault.saveIdentity(identity);
     set({ identity });
     messageReceiver.startListening();
+    profileService.publishWarriorProfile(identity).catch(() => {});
   },
 
   importAccount: (mnemonic: string, displayName: string) => {
@@ -45,6 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     KeyVault.saveIdentity(restored);
     set({ identity: restored });
     messageReceiver.startListening();
+    profileService.publishWarriorProfile(restored).catch(() => {});
     return restored;
   },
 

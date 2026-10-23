@@ -1055,9 +1055,7 @@ class FloatingBubbleView(
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                maxWidth = (280 * density).toInt()
-            }
+            )
             layoutParams = lp
         }
 
@@ -1065,6 +1063,7 @@ class FloatingBubbleView(
             text = content
             setTextColor(Color.WHITE)
             textSize = 13f
+            maxWidth = (260 * density).toInt()
             setLineSpacing(2f * density, 1f)
         }
         card.addView(contentView)

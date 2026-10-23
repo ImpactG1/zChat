@@ -407,8 +407,15 @@ class FloatingBubbleView(
 
         messagesScrollView = ScrollView(context).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+            isFillViewport = true
             setBackgroundColor(Color.TRANSPARENT)
-            addView(messagesLayout)
+            addView(
+                messagesLayout,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
         }
         panelLayout.addView(messagesScrollView)
 
@@ -1055,15 +1062,28 @@ class FloatingBubbleView(
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            ).apply {
+                if (isMe) {
+                    marginStart = (36 * density).toInt()
+                } else {
+                    marginEnd = (36 * density).toInt()
+                }
+            }
             layoutParams = lp
         }
 
         val contentView = TextView(context).apply {
             text = content
             setTextColor(Color.WHITE)
-            textSize = 13f
-            maxWidth = (260 * density).toInt()
+            textSize = 12.5f
+            val textLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            layoutParams = textLp
+            isSingleLine = false
+            maxLines = 1000
+            setHorizontallyScrolling(false)
             setLineSpacing(2f * density, 1f)
         }
         card.addView(contentView)
@@ -1102,7 +1122,9 @@ class FloatingBubbleView(
             metaRow.addView(checkmarkView)
         }
 
-        card.addView(metaRow)
+        if (metaRow.childCount > 0) {
+            card.addView(metaRow)
+        }
         bubbleContainer.addView(card)
         messagesLayout.addView(bubbleContainer)
 

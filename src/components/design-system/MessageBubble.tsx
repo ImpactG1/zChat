@@ -225,6 +225,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             lineHeight: 1.5,
             color: 'var(--text-white)',
             wordBreak: 'break-word',
+            overflowWrap: 'anywhere',
+            whiteSpace: 'pre-wrap',
             userSelect: 'text',
           }}
         >

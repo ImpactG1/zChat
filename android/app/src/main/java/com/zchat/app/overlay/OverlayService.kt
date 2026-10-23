@@ -124,7 +124,8 @@ class OverlayService : Service() {
 
         val wm = windowManager ?: return
 
-        var layoutFlags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+        var layoutFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
         if (initialClickThrough) {
@@ -139,6 +140,7 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             alpha = 1.0f // Surface is 100% solid; ghost effect is background-only
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
 
         bubbleView = FloatingBubbleView(

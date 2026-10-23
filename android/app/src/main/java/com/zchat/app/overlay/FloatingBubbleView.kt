@@ -3,7 +3,9 @@ package com.zchat.app.overlay
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.DisplayMetrics
@@ -31,14 +33,12 @@ class FloatingBubbleView(
     private val density = context.resources.displayMetrics.density
     private val bubbleSize = (56 * density).toInt()
 
-    // Mode Dimensions
-    // Minimized Mode: Scaled-down compact window (chat only)
-    private val minimizedWidth = Math.min((310 * density).toInt(), (context.resources.displayMetrics.widthPixels * 0.88f).toInt())
-    private val minimizedHeight = Math.min((360 * density).toInt(), (context.resources.displayMetrics.heightPixels * 0.58f).toInt())
+    // Resizable Window Geometry (Customizable by user in real time via corner grip)
+    private var customMinimizedWidth = Math.min((310 * density).toInt(), (context.resources.displayMetrics.widthPixels * 0.88f).toInt())
+    private var customMinimizedHeight = Math.min((260 * density).toInt(), (context.resources.displayMetrics.heightPixels * 0.45f).toInt())
 
-    // Maximized Mode: Larger window with conversation switcher
-    private val maximizedWidth = Math.min((390 * density).toInt(), (context.resources.displayMetrics.widthPixels * 0.94f).toInt())
-    private val maximizedHeight = Math.min((520 * density).toInt(), (context.resources.displayMetrics.heightPixels * 0.74f).toInt())
+    private var customMaximizedWidth = Math.min((390 * density).toInt(), (context.resources.displayMetrics.widthPixels * 0.94f).toInt())
+    private var customMaximizedHeight = Math.min((520 * density).toInt(), (context.resources.displayMetrics.heightPixels * 0.74f).toInt())
 
     enum class WindowMode { MINIMIZED, MAXIMIZED }
 
@@ -49,6 +49,7 @@ class FloatingBubbleView(
 
     // Cached data
     private var currentActivePubkey: String = ""
+    private var currentActiveTag: String = "#PEER"
     private var currentContactsJson: String = "[]"
 
     // Bubble components (Bubble form)
@@ -56,44 +57,60 @@ class FloatingBubbleView(
     private val iconView: ImageView
     private val badgeView: TextView
 
-    // Window components
+    // Window components (Void Aesthetics / Portal UI)
     private val panelLayout: LinearLayout
     private val channelTitleView: TextView
+    private val channelTagView: TextView
     private val modeToggleBtn: TextView
     private val clickThroughBtn: TextView
     private val alphaPercentText: TextView
+    private val timerBadgeView: TextView
     private val chatSwitcherScrollView: HorizontalScrollView
     private val chatSwitcherLayout: LinearLayout
     private val messagesLayout: LinearLayout
     private val messagesScrollView: ScrollView
     private val replyInputView: EditText
+    private val resizeGripRightView: ResizeCornerGripView
+    private val resizeGripLeftView: ResizeCornerGripView
 
-    // Drag state
+    // Drag state for header
     private var initialX = 0
     private var initialY = 0
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var isDragging = false
-    private val touchSlop = 12f
+    private val touchSlop = 10f
+
+    // Corner Resize state
+    private var resizeStartX = 0f
+    private var resizeStartY = 0f
+    private var resizeStartW = 0
+    private var resizeStartH = 0
+    private var resizeStartPosX = 0
 
     init {
-        // Starts in Minimized window mode (scaled-down compact chat)
-        layoutParams.width = minimizedWidth
-        layoutParams.height = minimizedHeight
+        // Starts in Minimized window mode with FLAG_NOT_TOUCH_MODAL
+        // FLAG_NOT_TOUCH_MODAL is CRITICAL: It allows touches outside the window bounds
+        // to pass directly through to underlying applications and games!
+        layoutParams.width = customMinimizedWidth
+        layoutParams.height = customMinimizedHeight
         layoutParams.gravity = Gravity.TOP or Gravity.START
         layoutParams.x = 20
-        layoutParams.y = (80 * density).toInt()
-        layoutParams.alpha = 1.0f // Surface is 100% solid; ghost effect is background-only
+        layoutParams.y = (70 * density).toInt()
+        layoutParams.alpha = 1.0f
+        layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
 
         // =====================================================================
-        // 1. BUBBLE FORM (Floating Sigil Bubble when collapsed)
+        // 1. BUBBLE FORM (Floating Sigil Bubble when collapsed via "✕")
         // =====================================================================
         bubbleLayout = FrameLayout(context).apply {
             val bgDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 colors = intArrayOf(Color.parseColor("#050608"), Color.parseColor("#0B0D11"))
                 orientation = GradientDrawable.Orientation.TL_BR
-                setStroke((2f * density).toInt(), Color.parseColor("#55FFFFFF"))
+                setStroke((1.8f * density).toInt(), Color.parseColor("#44FFFFFF"))
             }
             background = bgDrawable
             elevation = 20f * density
@@ -129,7 +146,7 @@ class FloatingBubbleView(
         addView(bubbleLayout, LayoutParams(bubbleSize, bubbleSize))
 
         // =====================================================================
-        // 2. WINDOW FORM (Void Aesthetics)
+        // 2. WINDOW FORM (Portal Chat UI & Void Aesthetics)
         // =====================================================================
         panelLayout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -138,7 +155,7 @@ class FloatingBubbleView(
         }
         updateBackgroundTransparency()
 
-        // --- Void Header Bar ---
+        // --- Blade Chat Header (Portal Style) ---
         val headerBar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -146,12 +163,12 @@ class FloatingBubbleView(
             val headerBg = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadii = floatArrayOf(
-                    10f * density, 10f * density,
-                    10f * density, 10f * density,
+                    8f * density, 8f * density,
+                    8f * density, 8f * density,
                     0f, 0f, 0f, 0f
                 )
-                setColor(Color.parseColor("#0B0D11")) // Void-2 surface
-                setStroke((1f * density).toInt(), Color.parseColor("#26FFFFFF"))
+                setColor(Color.parseColor("#050608")) // var(--void-1)
+                setStroke((1f * density).toInt(), Color.parseColor("#24FFFFFF"))
             }
             background = headerBg
         }
@@ -165,9 +182,15 @@ class FloatingBubbleView(
         }
         headerBar.addView(headerIcon)
 
+        // Title Column: Alias, #Tag, and E2EE status badge
         val titleContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val nameRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
 
         channelTitleView = TextView(context).apply {
@@ -177,34 +200,74 @@ class FloatingBubbleView(
             typeface = Typeface.DEFAULT_BOLD
             maxLines = 1
         }
-        titleContainer.addView(channelTitleView)
+        nameRow.addView(channelTitleView)
 
-        val subTitleView = TextView(context).apply {
-            text = "ENCRYPTED P2P"
+        channelTagView = TextView(context).apply {
+            text = " #P2P"
             setTextColor(Color.parseColor("#8C93A0"))
-            textSize = 8.5f
+            textSize = 9.5f
+            typeface = Typeface.MONOSPACE
+            maxLines = 1
+        }
+        nameRow.addView(channelTagView)
+        titleContainer.addView(nameRow)
+
+        val statusRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val statusView = TextView(context).apply {
+            text = "🔒 CHACHA20-POLY1305 E2EE"
+            setTextColor(Color.parseColor("#64748B"))
+            textSize = 8f
             typeface = Typeface.MONOSPACE
         }
-        titleContainer.addView(subTitleView)
+        statusRow.addView(statusView)
+        titleContainer.addView(statusRow)
         headerBar.addView(titleContainer)
+
+        // Disappearing Timer Badge (Portal Style: 24H amber/bronze pill)
+        timerBadgeView = TextView(context).apply {
+            text = "24H"
+            setTextColor(Color.parseColor("#E5A855"))
+            textSize = 8.5f
+            typeface = Typeface.MONOSPACE
+            val timerBg = GradientDrawable().apply {
+                cornerRadius = 2f * density
+                setColor(Color.parseColor("#261C10"))
+                setStroke((1f * density).toInt(), Color.parseColor("#99733E"))
+            }
+            background = timerBg
+            setPadding((5 * density).toInt(), (2 * density).toInt(), (5 * density).toInt(), (2 * density).toInt())
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = (4 * density).toInt()
+            }
+            layoutParams = lp
+        }
+        headerBar.addView(timerBadgeView)
 
         // Ghost Mode (Transparency Slider - 0% to 100%)
         val ghostContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val bg = GradientDrawable().apply {
-                cornerRadius = 3f * density
-                setColor(Color.parseColor("#12151C"))
-                setStroke((1f * density).toInt(), Color.parseColor("#26FFFFFF"))
+                cornerRadius = 2f * density
+                setColor(Color.parseColor("#0B0D11"))
+                setStroke((1f * density).toInt(), Color.parseColor("#22FFFFFF"))
             }
             background = bg
-            setPadding((5 * density).toInt(), (3 * density).toInt(), (5 * density).toInt(), (3 * density).toInt())
-            layoutParams = LinearLayout.LayoutParams(
+            setPadding((4 * density).toInt(), (2 * density).toInt(), (4 * density).toInt(), (2 * density).toInt())
+            val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                marginEnd = (5 * density).toInt()
+                marginEnd = (4 * density).toInt()
             }
+            layoutParams = lp
         }
 
         val ghostLabel = TextView(context).apply {
@@ -219,7 +282,7 @@ class FloatingBubbleView(
         val alphaSeekBar = SeekBar(context).apply {
             max = 100
             progress = currentOpacityPercent
-            layoutParams = LinearLayout.LayoutParams((48 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams((44 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     setOpacity(progress)
@@ -246,17 +309,17 @@ class FloatingBubbleView(
             textSize = 8.5f
             typeface = Typeface.MONOSPACE
             val btnBg = GradientDrawable().apply {
-                cornerRadius = 3f * density
-                setColor(Color.parseColor("#12151C"))
-                setStroke((1f * density).toInt(), Color.parseColor("#33FFFFFF"))
+                cornerRadius = 2f * density
+                setColor(Color.parseColor("#0B0D11"))
+                setStroke((1f * density).toInt(), Color.parseColor("#2EFFFFFF"))
             }
             background = btnBg
-            setPadding((6 * density).toInt(), (4 * density).toInt(), (6 * density).toInt(), (4 * density).toInt())
+            setPadding((5 * density).toInt(), (3 * density).toInt(), (5 * density).toInt(), (3 * density).toInt())
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                marginEnd = (5 * density).toInt()
+                marginEnd = (4 * density).toInt()
             }
             layoutParams = lp
             setOnClickListener {
@@ -269,21 +332,21 @@ class FloatingBubbleView(
         modeToggleBtn = TextView(context).apply {
             text = "MAX"
             setTextColor(Color.WHITE)
-            textSize = 9f
+            textSize = 8.5f
             typeface = Typeface.MONOSPACE
             gravity = Gravity.CENTER
             val minBg = GradientDrawable().apply {
-                cornerRadius = 3f * density
-                setColor(Color.parseColor("#12151C"))
-                setStroke((1f * density).toInt(), Color.parseColor("#44FFFFFF"))
+                cornerRadius = 2f * density
+                setColor(Color.parseColor("#0B0D11"))
+                setStroke((1f * density).toInt(), Color.parseColor("#38FFFFFF"))
             }
             background = minBg
-            setPadding((7 * density).toInt(), (4 * density).toInt(), (7 * density).toInt(), (4 * density).toInt())
+            setPadding((6 * density).toInt(), (3 * density).toInt(), (6 * density).toInt(), (3 * density).toInt())
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                marginEnd = (5 * density).toInt()
+                marginEnd = (4 * density).toInt()
             }
             layoutParams = lp
             setOnClickListener {
@@ -296,18 +359,18 @@ class FloatingBubbleView(
         val closeBtn = TextView(context).apply {
             text = "✕"
             setTextColor(Color.WHITE)
-            textSize = 11f
+            textSize = 10.5f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             val closeBg = GradientDrawable().apply {
-                cornerRadius = 3f * density
-                setColor(Color.parseColor("#191D26"))
+                cornerRadius = 2f * density
+                setColor(Color.parseColor("#14161A"))
                 setStroke((1f * density).toInt(), Color.parseColor("#33FFFFFF"))
             }
             background = closeBg
-            setPadding((8 * density).toInt(), (3 * density).toInt(), (8 * density).toInt(), (3 * density).toInt())
+            setPadding((7 * density).toInt(), (3 * density).toInt(), (7 * density).toInt(), (3 * density).toInt())
             setOnClickListener {
-                // When clicking "x", convert back to Bubble Form
+                // When clicking "✕", convert back to Bubble Form
                 collapseToBubble()
             }
         }
@@ -320,12 +383,12 @@ class FloatingBubbleView(
         // Hidden in Minimized mode; visible in Maximized mode so users can switch chats
         chatSwitcherLayout = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding((8 * density).toInt(), (6 * density).toInt(), (8 * density).toInt(), (6 * density).toInt())
+            setPadding((8 * density).toInt(), (5 * density).toInt(), (8 * density).toInt(), (5 * density).toInt())
         }
 
         chatSwitcherScrollView = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
-            setBackgroundColor(Color.parseColor("#0B0D11"))
+            setBackgroundColor(Color.parseColor("#050608"))
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -336,10 +399,10 @@ class FloatingBubbleView(
         }
         panelLayout.addView(chatSwitcherScrollView)
 
-        // --- Messages Stream (Scrollable) ---
+        // --- Live Messages Stream (Portal Style) ---
         messagesLayout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt())
+            setPadding((8 * density).toInt(), (6 * density).toInt(), (8 * density).toInt(), (6 * density).toInt())
         }
 
         messagesScrollView = ScrollView(context).apply {
@@ -349,22 +412,22 @@ class FloatingBubbleView(
         }
         panelLayout.addView(messagesScrollView)
 
-        addSystemMessage("ENCRYPTED TRANSMISSIONS ONLY")
+        addSystemMessage("NO TRANSMISSIONS YET // ENCRYPTED P2P ACTIVE")
 
-        // --- Quick Reply Bar ---
+        // --- Input Area (Portal BladeInput + Solid Chrome Button) ---
         val replyBar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding((8 * density).toInt(), (6 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
+            setPadding((8 * density).toInt(), (6 * density).toInt(), (8 * density).toInt(), (6 * density).toInt())
             val replyBg = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadii = floatArrayOf(
                     0f, 0f, 0f, 0f,
-                    10f * density, 10f * density,
-                    10f * density, 10f * density
+                    8f * density, 8f * density,
+                    8f * density, 8f * density
                 )
-                setColor(Color.parseColor("#0B0D11"))
-                setStroke((1f * density).toInt(), Color.parseColor("#26FFFFFF"))
+                setColor(Color.parseColor("#050608")) // var(--void-1)
+                setStroke((1f * density).toInt(), Color.parseColor("#22FFFFFF"))
             }
             background = replyBg
         }
@@ -373,15 +436,17 @@ class FloatingBubbleView(
             hint = "Whisper..."
             setHintTextColor(Color.parseColor("#555B66"))
             setTextColor(Color.WHITE)
-            textSize = 12f
+            textSize = 12.5f
             val inputBg = GradientDrawable().apply {
-                cornerRadius = 3f * density
-                setColor(Color.parseColor("#050608"))
-                setStroke((1f * density).toInt(), Color.parseColor("#26FFFFFF"))
+                cornerRadius = 2f * density
+                setColor(Color.parseColor("#000000")) // var(--void-0)
+                setStroke((1f * density).toInt(), Color.parseColor("#24FFFFFF"))
             }
             background = inputBg
             setPadding((10 * density).toInt(), (6 * density).toInt(), (10 * density).toInt(), (6 * density).toInt())
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = (34 * density).toInt() // Reserve space for left corner resize grip
+            }
             maxLines = 2
         }
         replyBar.addView(replyInputView)
@@ -393,12 +458,13 @@ class FloatingBubbleView(
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             val sendBg = GradientDrawable().apply {
-                cornerRadius = 3f * density
+                cornerRadius = 2f * density
                 setColor(Color.WHITE) // Pure Chrome Button
             }
             background = sendBg
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, (32 * density).toInt()).apply {
                 marginStart = (6 * density).toInt()
+                marginEnd = (36 * density).toInt() // Reserve space for right corner resize grip
             }
             layoutParams = lp
             setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
@@ -406,7 +472,7 @@ class FloatingBubbleView(
                 val text = replyInputView.text.toString().trim()
                 if (text.isNotEmpty()) {
                     onSendMessageListener(text)
-                    addMessageCard("You", text, isMe = true)
+                    addMessageCard("You", "", text, isMe = true, timeStr = "")
                     replyInputView.setText("")
                 }
             }
@@ -414,11 +480,143 @@ class FloatingBubbleView(
         replyBar.addView(sendBtn)
         panelLayout.addView(replyBar)
 
-        addView(panelLayout, LayoutParams(minimizedWidth, minimizedHeight))
+        addView(panelLayout, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        // =====================================================================
+        // 3. TACTICAL DUAL CORNER RESIZE GRIPS (Bottom-Right & Bottom-Left)
+        // Enables free corner resizing on Android (height down to 100dp & width customizable!)
+        // =====================================================================
+        val gripS = (38 * density).toInt()
+        resizeGripRightView = ResizeCornerGripView(context, isRight = true).apply {
+            layoutParams = LayoutParams(gripS, gripS).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+            }
+            elevation = 30f * density
+        }
+        resizeGripLeftView = ResizeCornerGripView(context, isRight = false).apply {
+            layoutParams = LayoutParams(gripS, gripS).apply {
+                gravity = Gravity.BOTTOM or Gravity.START
+            }
+            elevation = 30f * density
+        }
+        setupCornerResizing()
+        addView(resizeGripRightView)
+        addView(resizeGripLeftView)
     }
 
     // =========================================================================
-    // TOUCH & DRAG
+    // DUAL CORNER RESIZE LOGIC (Height & Width fully customizable!)
+    // =========================================================================
+    private fun setupCornerResizing() {
+        // 1. Bottom-Right Corner Grip (Drag right to widen, down to lengthen, up to minimize height)
+        resizeGripRightView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    resizeStartX = event.rawX
+                    resizeStartY = event.rawY
+                    resizeStartW = layoutParams.width
+                    resizeStartH = layoutParams.height
+                    parent.requestDisallowInterceptTouchEvent(true)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dw = (event.rawX - resizeStartX).toInt()
+                    val dh = (event.rawY - resizeStartY).toInt()
+
+                    val displayMetrics = DisplayMetrics()
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay.getMetrics(displayMetrics)
+                    val screenWidth = displayMetrics.widthPixels
+                    val screenHeight = displayMetrics.heightPixels
+
+                    // Min bounds allow user to scale height down as much as they want (100dp!)
+                    val minW = (180 * density).toInt()
+                    val minH = (100 * density).toInt()
+                    val maxW = (screenWidth - layoutParams.x).coerceAtLeast(minW)
+                    val maxH = (screenHeight - layoutParams.y).coerceAtLeast(minH)
+
+                    val newW = (resizeStartW + dw).coerceIn(minW, maxW)
+                    val newH = (resizeStartH + dh).coerceIn(minH, maxH)
+
+                    layoutParams.width = newW
+                    layoutParams.height = newH
+
+                    try {
+                        windowManager.updateViewLayout(this, layoutParams)
+                    } catch (e: Exception) {}
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    // Save user-customized size for current mode
+                    if (currentWindowMode == WindowMode.MINIMIZED) {
+                        customMinimizedWidth = layoutParams.width
+                        customMinimizedHeight = layoutParams.height
+                    } else {
+                        customMaximizedWidth = layoutParams.width
+                        customMaximizedHeight = layoutParams.height
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+
+        // 2. Bottom-Left Corner Grip (Drag left to widen, down to lengthen, up to minimize height)
+        resizeGripLeftView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    resizeStartX = event.rawX
+                    resizeStartY = event.rawY
+                    resizeStartW = layoutParams.width
+                    resizeStartH = layoutParams.height
+                    resizeStartPosX = layoutParams.x
+                    parent.requestDisallowInterceptTouchEvent(true)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dw = -(event.rawX - resizeStartX).toInt()
+                    val dh = (event.rawY - resizeStartY).toInt()
+
+                    val displayMetrics = DisplayMetrics()
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay.getMetrics(displayMetrics)
+                    val screenHeight = displayMetrics.heightPixels
+
+                    val minW = (180 * density).toInt()
+                    val minH = (100 * density).toInt()
+                    val maxW = (resizeStartPosX + resizeStartW).coerceAtLeast(minW)
+                    val maxH = (screenHeight - layoutParams.y).coerceAtLeast(minH)
+
+                    val newW = (resizeStartW + dw).coerceIn(minW, maxW)
+                    val newH = (resizeStartH + dh).coerceIn(minH, maxH)
+                    val newX = resizeStartPosX + (resizeStartW - newW)
+
+                    layoutParams.x = newX
+                    layoutParams.width = newW
+                    layoutParams.height = newH
+
+                    try {
+                        windowManager.updateViewLayout(this, layoutParams)
+                    } catch (e: Exception) {}
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (currentWindowMode == WindowMode.MINIMIZED) {
+                        customMinimizedWidth = layoutParams.width
+                        customMinimizedHeight = layoutParams.height
+                    } else {
+                        customMaximizedWidth = layoutParams.width
+                        customMaximizedHeight = layoutParams.height
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    // =========================================================================
+    // TOUCH & DRAG FOR HEADER & BUBBLE
     // =========================================================================
     private fun setupBubbleTouch() {
         bubbleLayout.setOnTouchListener { _, event ->
@@ -491,6 +689,8 @@ class FloatingBubbleView(
         isBubbleForm = false
         bubbleLayout.visibility = View.GONE
         panelLayout.visibility = View.VISIBLE
+        resizeGripRightView.visibility = View.VISIBLE
+        resizeGripLeftView.visibility = View.VISIBLE
 
         applyCurrentWindowDimensions()
     }
@@ -501,6 +701,8 @@ class FloatingBubbleView(
         imm?.hideSoftInputFromWindow(replyInputView.windowToken, 0)
 
         panelLayout.visibility = View.GONE
+        resizeGripRightView.visibility = View.GONE
+        resizeGripLeftView.visibility = View.GONE
         bubbleLayout.visibility = View.VISIBLE
 
         layoutParams.width = bubbleSize
@@ -530,7 +732,7 @@ class FloatingBubbleView(
         }
 
         val animator = ValueAnimator.ofInt(currentX, targetX).apply {
-            duration = 250
+            duration = 240
             interpolator = OvershootInterpolator(1.1f)
             addUpdateListener { anim ->
                 layoutParams.x = anim.animatedValue as Int
@@ -569,8 +771,8 @@ class FloatingBubbleView(
     }
 
     private fun applyCurrentWindowDimensions() {
-        val targetWidth = if (currentWindowMode == WindowMode.MAXIMIZED) maximizedWidth else minimizedWidth
-        val targetHeight = if (currentWindowMode == WindowMode.MAXIMIZED) maximizedHeight else minimizedHeight
+        val targetWidth = if (currentWindowMode == WindowMode.MAXIMIZED) customMaximizedWidth else customMinimizedWidth
+        val targetHeight = if (currentWindowMode == WindowMode.MAXIMIZED) customMaximizedHeight else customMinimizedHeight
 
         layoutParams.width = targetWidth
         layoutParams.height = targetHeight
@@ -580,7 +782,10 @@ class FloatingBubbleView(
         panelLp.height = targetHeight
         panelLayout.layoutParams = panelLp
 
-        var flags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+        // CRITICAL: FLAG_NOT_TOUCH_MODAL allows touches outside floating window
+        // to pass through to underlying games and apps!
+        var flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         if (isClickThrough) {
             flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
@@ -604,6 +809,7 @@ class FloatingBubbleView(
                 val item = array.getJSONObject(i)
                 val pubkey = item.optString("pubkey", "")
                 val alias = item.optString("alias", "User")
+                val tag = item.optString("tag", "#PEER")
                 val unread = item.optInt("unreadCount", 0)
                 val isSelected = (pubkey == currentActivePubkey)
 
@@ -611,8 +817,8 @@ class FloatingBubbleView(
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     val chipBg = GradientDrawable().apply {
-                        cornerRadius = 3f * density
-                        setColor(if (isSelected) Color.WHITE else Color.parseColor("#12151C"))
+                        cornerRadius = 2f * density
+                        setColor(if (isSelected) Color.WHITE else Color.parseColor("#0B0D11"))
                         setStroke((1f * density).toInt(), if (isSelected) Color.WHITE else Color.parseColor("#26FFFFFF"))
                     }
                     background = chipBg
@@ -621,13 +827,15 @@ class FloatingBubbleView(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
                     ).apply {
-                        marginEnd = (6 * density).toInt()
+                        marginEnd = (5 * density).toInt()
                     }
                     layoutParams = lp
 
                     setOnClickListener {
                         currentActivePubkey = pubkey
+                        currentActiveTag = tag
                         channelTitleView.text = alias.uppercase()
+                        channelTagView.text = " $tag"
                         onSelectContactListener(pubkey)
                         renderChatSwitcher()
                     }
@@ -649,16 +857,16 @@ class FloatingBubbleView(
                         textSize = 8f
                         typeface = Typeface.DEFAULT_BOLD
                         val bBg = GradientDrawable().apply {
-                            cornerRadius = 8f * density
+                            cornerRadius = 2f * density
                             setColor(if (isSelected) Color.BLACK else Color.WHITE)
                         }
                         background = bBg
-                        setPadding((4 * density).toInt(), (1 * density).toInt(), (4 * density).toInt(), (1 * density).toInt())
+                        setPadding((3 * density).toInt(), (1 * density).toInt(), (3 * density).toInt(), (1 * density).toInt())
                         val lp = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
                         ).apply {
-                            marginStart = (4 * density).toInt()
+                            marginStart = (3 * density).toInt()
                         }
                         layoutParams = lp
                     }
@@ -688,11 +896,11 @@ class FloatingBubbleView(
         val alphaInt = ((currentOpacityPercent * 255) / 100).coerceIn(0, 255)
         val panelBg = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = 10f * density
-            setColor(Color.argb(alphaInt, 5, 6, 8)) // Void-1 background
+            cornerRadius = 8f * density
+            setColor(Color.argb(alphaInt, 0, 0, 0)) // var(--void-0)
             setStroke(
                 (1.2f * density).toInt(),
-                Color.argb(Math.max(40, alphaInt), 255, 255, 255) // Subtle chrome border
+                Color.argb(Math.max(40, alphaInt), 255, 255, 255) // Metallic chrome border
             )
         }
         panelLayout.background = panelBg
@@ -709,7 +917,7 @@ class FloatingBubbleView(
                 clickThroughBtn.text = "PASS-THRU"
                 clickThroughBtn.setTextColor(Color.parseColor("#F59E0B"))
                 val btnBg = GradientDrawable().apply {
-                    cornerRadius = 3f * density
+                    cornerRadius = 2f * density
                     setColor(Color.parseColor("#221808"))
                     setStroke((1f * density).toInt(), Color.parseColor("#F59E0B"))
                 }
@@ -719,9 +927,9 @@ class FloatingBubbleView(
                 clickThroughBtn.text = "TOUCH"
                 clickThroughBtn.setTextColor(Color.parseColor("#DCDFE4"))
                 val btnBg = GradientDrawable().apply {
-                    cornerRadius = 3f * density
-                    setColor(Color.parseColor("#12151C"))
-                    setStroke((1f * density).toInt(), Color.parseColor("#33FFFFFF"))
+                    cornerRadius = 2f * density
+                    setColor(Color.parseColor("#0B0D11"))
+                    setStroke((1f * density).toInt(), Color.parseColor("#2EFFFFFF"))
                 }
                 clickThroughBtn.background = btnBg
             }
@@ -732,7 +940,7 @@ class FloatingBubbleView(
     }
 
     // =========================================================================
-    // DYNAMIC CHAT MESSAGES & BADGE
+    // DYNAMIC CHAT MESSAGES & BADGE (PORTAL MESSAGEBUBBLE STYLE)
     // =========================================================================
     fun updateChatData(channelTitle: String, messagesJson: String, activePubkey: String = "", contactsJson: String = "[]") {
         post {
@@ -753,14 +961,16 @@ class FloatingBubbleView(
                 messagesLayout.removeAllViews()
                 val array = JSONArray(messagesJson)
                 if (array.length() == 0) {
-                    addSystemMessage("NO TRANSMISSIONS YET")
+                    addSystemMessage("NO TRANSMISSIONS YET // ENCRYPTED P2P ACTIVE")
                 } else {
                     for (i in 0 until array.length()) {
                         val obj = array.getJSONObject(i)
-                        val sender = obj.optString("senderTag", obj.optString("authorAlias", "Teammate"))
+                        val senderName = obj.optString("senderName", obj.optString("authorAlias", "User"))
+                        val senderTag = obj.optString("senderTag", "")
                         val content = obj.optString("content", "")
                         val isMe = obj.optBoolean("isMe", false)
-                        addMessageCard(sender, content, isMe)
+                        val timeStr = obj.optString("time", "")
+                        addMessageCard(senderName, senderTag, content, isMe, timeStr)
                     }
                 }
                 messagesScrollView.post {
@@ -772,45 +982,131 @@ class FloatingBubbleView(
         }
     }
 
-    fun addMessageCard(sender: String, content: String, isMe: Boolean) {
+    /**
+     * Renders a message card adhering strictly to the Portal MessageBubble design
+     */
+    fun addMessageCard(senderName: String, senderTag: String, content: String, isMe: Boolean, timeStr: String) {
+        val bubbleContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (6 * density).toInt()
+            }
+            layoutParams = lp
+            gravity = if (isMe) Gravity.END else Gravity.START
+        }
+
+        // Sender Row for incoming messages (Portal Style: Alias uppercase + #Tag + Shield Lock)
+        if (!isMe && senderName.isNotEmpty()) {
+            val senderRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = (2 * density).toInt()
+                    marginStart = (4 * density).toInt()
+                }
+                layoutParams = lp
+            }
+
+            val nameView = TextView(context).apply {
+                text = senderName.uppercase()
+                setTextColor(Color.parseColor("#DCDFE4")) // var(--text-silver)
+                textSize = 10f
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            senderRow.addView(nameView)
+
+            if (senderTag.isNotEmpty()) {
+                val tagView = TextView(context).apply {
+                    text = " $senderTag"
+                    setTextColor(Color.parseColor("#8C93A0")) // var(--text-muted)
+                    textSize = 9f
+                    typeface = Typeface.MONOSPACE
+                }
+                senderRow.addView(tagView)
+            }
+
+            val lockIcon = TextView(context).apply {
+                text = " 🔒"
+                textSize = 8.5f
+            }
+            senderRow.addView(lockIcon)
+            bubbleContainer.addView(senderRow)
+        }
+
+        // Tactical Message Card Body (Portal MessageBubble Style)
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             val bg = GradientDrawable().apply {
                 cornerRadius = 3f * density
-                setColor(if (isMe) Color.parseColor("#161B24") else Color.parseColor("#0D1016"))
-                setStroke((1f * density).toInt(), if (isMe) Color.parseColor("#44FFFFFF") else Color.parseColor("#1FFFFFFF"))
+                setColor(if (isMe) Color.parseColor("#12151C") else Color.parseColor("#0B0D11")) // var(--void-3) vs var(--void-2)
+                setStroke(
+                    (1f * density).toInt(),
+                    if (isMe) Color.parseColor("#38FFFFFF") else Color.parseColor("#1EFFFFFF")
+                )
             }
             background = bg
-            setPadding((8 * density).toInt(), (5 * density).toInt(), (8 * density).toInt(), (5 * density).toInt())
+            setPadding((10 * density).toInt(), (7 * density).toInt(), (10 * density).toInt(), (6 * density).toInt())
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                gravity = if (isMe) Gravity.END else Gravity.START
-                bottomMargin = (5 * density).toInt()
-                marginStart = if (isMe) (32 * density).toInt() else 0
-                marginEnd = if (isMe) 0 else (32 * density).toInt()
+                maxWidth = (280 * density).toInt()
             }
             layoutParams = lp
         }
 
-        val senderView = TextView(context).apply {
-            text = sender
-            setTextColor(if (isMe) Color.WHITE else Color.parseColor("#8C93A0"))
-            textSize = 9f
-            typeface = Typeface.MONOSPACE
-        }
-        card.addView(senderView)
-
         val contentView = TextView(context).apply {
             text = content
             setTextColor(Color.WHITE)
-            textSize = 12f
-            setPadding(0, (2 * density).toInt(), 0, 0)
+            textSize = 13f
+            setLineSpacing(2f * density, 1f)
         }
         card.addView(contentView)
 
-        messagesLayout.addView(card)
+        // Metadata Sub-row: Timestamp + Double Checkmark for Self (Portal Style)
+        val metaRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (3 * density).toInt()
+                gravity = Gravity.END
+            }
+            layoutParams = lp
+        }
+
+        if (timeStr.isNotEmpty()) {
+            val timeView = TextView(context).apply {
+                text = timeStr
+                setTextColor(Color.parseColor("#8C93A0"))
+                textSize = 8.5f
+                typeface = Typeface.MONOSPACE
+            }
+            metaRow.addView(timeView)
+        }
+
+        if (isMe) {
+            val checkmarkView = TextView(context).apply {
+                text = " ✓✓"
+                setTextColor(Color.parseColor("#8C93A0"))
+                textSize = 9f
+                typeface = Typeface.MONOSPACE
+            }
+            metaRow.addView(checkmarkView)
+        }
+
+        card.addView(metaRow)
+        bubbleContainer.addView(card)
+        messagesLayout.addView(bubbleContainer)
+
         messagesScrollView.post {
             messagesScrollView.fullScroll(ScrollView.FOCUS_DOWN)
         }
@@ -835,6 +1131,35 @@ class FloatingBubbleView(
                 badgeView.visibility = View.VISIBLE
             } else {
                 badgeView.visibility = View.GONE
+            }
+        }
+    }
+
+    // =========================================================================
+    // CUSTOM VIEW FOR CORNER RESIZE GRIP
+    // Renders tactical metallic diagonal grip lines at bottom-right or bottom-left corner
+    // =========================================================================
+    class ResizeCornerGripView(context: Context, private val isRight: Boolean = true) : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#99FFFFFF")
+            strokeWidth = 1.8f * resources.displayMetrics.density
+            strokeCap = Paint.Cap.ROUND
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat()
+            val h = height.toFloat()
+            val d = resources.displayMetrics.density
+
+            if (isRight) {
+                // Two diagonal grip lines matching BladeInput / FloatingOverlayHUD (bottom-right)
+                canvas.drawLine(w - (6 * d), h - (16 * d), w - (16 * d), h - (6 * d), paint)
+                canvas.drawLine(w - (6 * d), h - (9 * d), w - (9 * d), h - (6 * d), paint)
+            } else {
+                // Two diagonal grip lines (bottom-left)
+                canvas.drawLine((6 * d), h - (16 * d), (16 * d), h - (6 * d), paint)
+                canvas.drawLine((6 * d), h - (9 * d), (9 * d), h - (6 * d), paint)
             }
         }
     }

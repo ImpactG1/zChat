@@ -4,12 +4,15 @@ import { db } from '@/core/storage/db';
 import { sendDirectMessage } from '@/core/nostr/messageSender';
 import { Contact, ChatMessage, GroupChat, GroupMessage } from '@/types';
 import { useOverlayStore } from '@/stores/useOverlayStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { EmblemLogo } from '@/components/common/EmblemLogo';
 import { ChromeButton } from '@/components/design-system/ChromeButton';
+import { MessageBubble } from '@/components/design-system/MessageBubble';
 import {
   IconGhostMode,
   IconClickThrough,
   IconBladeSend,
+  IconShieldLock,
 } from '@/components/icons/RazorIcons';
 import { SoundEngine } from '@/core/feedback/soundEffects';
 
@@ -25,6 +28,7 @@ export const FloatingOverlayHUD: React.FC = () => {
     activeConversationId,
     setActiveConversation,
   } = useOverlayStore();
+  const { identity } = useAuthStore();
 
   // Bubble form vs Window form (clicking "✕" converts window back to Bubble form)
   const [isBubbleForm, setIsBubbleForm] = useState(false);
@@ -40,15 +44,17 @@ export const FloatingOverlayHUD: React.FC = () => {
   const [isDraggingBubble, setIsDraggingBubble] = useState(false);
   const bubbleDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
 
-  // Window Geometry
-  // Minimized size: 340px x 360px
-  // Maximized size: 480px x 540px
+  // Window Geometry (Both Min and Max sizes are customizable by user via corner grips!)
+  // Minimized initial: 320px x 260px (customizable down to 220px x 120px)
+  // Maximized initial: 460px x 520px
   const [panelPos, setPanelPos] = useState({ x: 32, y: 56 });
-  const [maximizedSize, setMaximizedSize] = useState({ width: 480, height: 540 });
+  const [minimizedSize, setMinimizedSize] = useState({ width: 320, height: 260 });
+  const [maximizedSize, setMaximizedSize] = useState({ width: 460, height: 520 });
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
   const panelDragStartRef = useRef({ startX: 0, startY: 0, initX: 0, initY: 0 });
   const [isResizingPanel, setIsResizingPanel] = useState(false);
-  const panelResizeStartRef = useRef({ startX: 0, startY: 0, initW: 0, initH: 0 });
+  const [resizeCorner, setResizeCorner] = useState<'br' | 'bl'>('br');
+  const panelResizeStartRef = useRef({ startX: 0, startY: 0, initW: 0, initH: 0, initX: 0 });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -173,28 +179,48 @@ export const FloatingOverlayHUD: React.FC = () => {
     } catch {}
   };
 
-  const handlePanelResizeStart = (e: React.PointerEvent) => {
+  const handlePanelResizeStart = (e: React.PointerEvent, corner: 'br' | 'bl') => {
     e.stopPropagation();
     setIsResizingPanel(true);
+    setResizeCorner(corner);
+    const activeW = windowMode === 'maximized' ? maximizedSize.width : minimizedSize.width;
+    const activeH = windowMode === 'maximized' ? maximizedSize.height : minimizedSize.height;
     panelResizeStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      initW: maximizedSize.width,
-      initH: maximizedSize.height,
+      initW: activeW,
+      initH: activeH,
+      initX: panelPos.x,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const handlePanelResizeMove = (e: React.PointerEvent) => {
     if (!isResizingPanel) return;
-    const dw = e.clientX - panelResizeStartRef.current.startX;
     const dh = e.clientY - panelResizeStartRef.current.startY;
-    const maxW = Math.max(340, window.innerWidth - panelPos.x - 10);
-    const maxH = Math.max(300, window.innerHeight - panelPos.y - 10);
-    setMaximizedSize({
-      width: Math.max(340, Math.min(maxW, panelResizeStartRef.current.initW + dw)),
-      height: Math.max(300, Math.min(maxH, panelResizeStartRef.current.initH + dh)),
-    });
+    const isBr = resizeCorner === 'br';
+    const dw = isBr
+      ? e.clientX - panelResizeStartRef.current.startX
+      : -(e.clientX - panelResizeStartRef.current.startX);
+
+    const minW = windowMode === 'maximized' ? 260 : 200;
+    const minH = 120; // Allows user to minimize height down to compact strip!
+    const maxW = Math.max(minW, window.innerWidth - 20);
+    const maxH = Math.max(minH, window.innerHeight - 20);
+
+    const newW = Math.max(minW, Math.min(maxW, panelResizeStartRef.current.initW + dw));
+    const newH = Math.max(minH, Math.min(maxH, panelResizeStartRef.current.initH + dh));
+
+    if (!isBr) {
+      const newX = panelResizeStartRef.current.initX + (panelResizeStartRef.current.initW - newW);
+      setPanelPos((prev) => ({ ...prev, x: Math.max(0, newX) }));
+    }
+
+    if (windowMode === 'maximized') {
+      setMaximizedSize({ width: newW, height: newH });
+    } else {
+      setMinimizedSize({ width: newW, height: newH });
+    }
   };
 
   const handlePanelResizeEnd = (e: React.PointerEvent) => {
@@ -224,9 +250,9 @@ export const FloatingOverlayHUD: React.FC = () => {
   const totalUnreadCount = conversationList.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   const activeTitle = activeItem ? activeItem.alias.toUpperCase() : 'ZENYTH';
 
-  // Dimensions based on mode
-  const currentWidth = windowMode === 'maximized' ? maximizedSize.width : 340;
-  const currentHeight = windowMode === 'maximized' ? maximizedSize.height : 360;
+  // Dimensions based on mode - both modes are fully customizable!
+  const currentWidth = windowMode === 'maximized' ? maximizedSize.width : minimizedSize.width;
+  const currentHeight = windowMode === 'maximized' ? maximizedSize.height : minimizedSize.height;
 
   return (
     <div
@@ -385,25 +411,52 @@ export const FloatingOverlayHUD: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
               <EmblemLogo size={20} />
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: '11.5px',
-                    letterSpacing: '0.12em',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {activeTitle}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '12px',
+                      letterSpacing: '0.12em',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {activeTitle}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', color: 'var(--text-muted)' }}>
+                    {activeItem && 'tag' in activeItem ? (activeItem as any).tag : '#PEER'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                  <IconShieldLock size={9} color="var(--status-encrypted)" />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+                    CHACHA20-POLY1305 E2EE
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Header Controls (All buttons have pointerEvents: 'auto') */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', pointerEvents: 'auto' }}>
+              {/* 24H Disappearing Timer Badge (Portal Style) */}
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '8.5px',
+                  color: '#E5A855',
+                  background: 'rgba(38, 28, 16, 0.95)',
+                  border: '1px solid rgba(153, 115, 62, 0.65)',
+                  padding: '2px 5px',
+                  borderRadius: '2px',
+                  whiteSpace: 'nowrap',
+                }}
+                title="Disappearing messages timer: 24H active"
+              >
+                24H
+              </div>
               {/* Opacity Slider (0% to 100%) */}
               <div
                 style={{
@@ -566,7 +619,7 @@ export const FloatingOverlayHUD: React.FC = () => {
             </div>
           )}
 
-          {/* Messages Stream (Last 25 messages, solid text & readable cards) */}
+          {/* Messages Stream (Portal MessageBubble Style, identical theme & typography) */}
           <div
             style={{
               flex: 1,
@@ -578,55 +631,42 @@ export const FloatingOverlayHUD: React.FC = () => {
             }}
           >
             {isGroupActive && groupMessages.length > 0 ? (
-              groupMessages.slice(-25).map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    padding: '7px 10px',
-                    background: msg.authorAlias === 'You' ? 'rgba(25, 30, 40, 0.92)' : 'rgba(14, 17, 23, 0.90)',
-                    border: '1px solid rgba(255, 255, 255, 0.16)',
-                    borderRadius: '2px',
-                    fontSize: '12px',
-                    color: '#ffffff',
-                    alignSelf: msg.authorAlias === 'You' ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                  }}
-                >
-                  <div style={{ fontSize: '9px', color: 'var(--text-silver)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
-                    {msg.authorAlias || msg.senderTag || 'Teammate'}
-                  </div>
-                  {msg.content}
-                </div>
-              ))
+              groupMessages.slice(-35).map((msg) => {
+                const isSelf = msg.authorAlias === 'You' || msg.senderPubkey === identity?.pubkey;
+                return (
+                  <MessageBubble
+                    key={msg.id}
+                    id={msg.id}
+                    content={msg.content}
+                    timestamp={msg.timestamp}
+                    isSelf={isSelf}
+                    senderName={isSelf ? undefined : (msg.authorAlias || msg.senderTag || 'Teammate')}
+                    senderTag={isSelf ? undefined : (msg.senderTag || '#PEER')}
+                    status="delivered"
+                    disappearingTimer="24h"
+                  />
+                );
+              })
             ) : directMessages.length > 0 ? (
-              directMessages.slice(-25).map((msg) => {
+              directMessages.slice(-35).map((msg) => {
                 const isMe = msg.senderPubkey !== activePubkey;
                 return (
-                  <div
+                  <MessageBubble
                     key={msg.id}
-                    style={{
-                      padding: '7px 10px',
-                      background: isMe ? 'rgba(25, 30, 40, 0.92)' : 'rgba(14, 17, 23, 0.90)',
-                      border: '1px solid rgba(255, 255, 255, 0.16)',
-                      borderRadius: '2px',
-                      fontSize: '12px',
-                      color: '#ffffff',
-                      alignSelf: isMe ? 'flex-end' : 'flex-start',
-                      maxWidth: '85%',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    <div style={{ fontSize: '9px', color: 'var(--text-silver)', marginBottom: '2px', fontFamily: 'var(--font-mono)' }}>
-                      {isMe ? 'You' : activeTitle}
-                    </div>
-                    {msg.content}
-                  </div>
+                    id={msg.id}
+                    content={msg.content}
+                    timestamp={msg.timestamp}
+                    isSelf={isMe}
+                    senderName={isMe ? undefined : activeTitle}
+                    senderTag={isMe ? undefined : (activeItem && 'tag' in activeItem ? (activeItem as any).tag : '#PEER')}
+                    status="delivered"
+                    disappearingTimer="24h"
+                  />
                 );
               })
             ) : (
               <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-silver)', fontSize: '11px', fontFamily: 'var(--font-mono)', background: 'rgba(11, 13, 17, 0.5)', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '2px' }}>
-                NO TRANSMISSIONS YET
+                NO TRANSMISSIONS YET // ENCRYPTED P2P ACTIVE
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -673,36 +713,64 @@ export const FloatingOverlayHUD: React.FC = () => {
             </ChromeButton>
           </form>
 
-          {/* Tactical Resize Grip (Active in Maximized Mode) */}
-          {windowMode === 'maximized' && (
-            <div
-              onPointerDown={handlePanelResizeStart}
-              onPointerMove={handlePanelResizeMove}
-              onPointerUp={handlePanelResizeEnd}
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                right: 0,
-                width: '16px',
-                height: '16px',
-                cursor: 'nwse-resize',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                touchAction: 'none',
-                pointerEvents: 'auto',
-                background: 'rgba(255, 255, 255, 0.08)',
-                borderTopLeftRadius: '3px',
-                zIndex: 10,
-              }}
-              title="Drag to resize HUD window"
-            >
-              <svg width="8" height="8" viewBox="0 0 8 8">
-                <line x1="7" y1="1" x2="1" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-                <line x1="7" y1="4" x2="4" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-              </svg>
-            </div>
-          )}
+          {/* Tactical Dual Corner Resize Grips (Active in BOTH Minimized & Maximized modes!) */}
+          {/* Bottom-Right Corner Grip */}
+          <div
+            onPointerDown={(e) => handlePanelResizeStart(e, 'br')}
+            onPointerMove={handlePanelResizeMove}
+            onPointerUp={handlePanelResizeEnd}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: '18px',
+              height: '18px',
+              cursor: 'nwse-resize',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              touchAction: 'none',
+              pointerEvents: 'auto',
+              background: 'rgba(255, 255, 255, 0.10)',
+              borderTopLeftRadius: '3px',
+              zIndex: 10,
+            }}
+            title="Drag to resize HUD window (bottom-right)"
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8">
+              <line x1="7" y1="1" x2="1" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="7" y1="4" x2="4" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          {/* Bottom-Left Corner Grip */}
+          <div
+            onPointerDown={(e) => handlePanelResizeStart(e, 'bl')}
+            onPointerMove={handlePanelResizeMove}
+            onPointerUp={handlePanelResizeEnd}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              width: '18px',
+              height: '18px',
+              cursor: 'nesw-resize',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              touchAction: 'none',
+              pointerEvents: 'auto',
+              background: 'rgba(255, 255, 255, 0.10)',
+              borderTopRightRadius: '3px',
+              zIndex: 10,
+            }}
+            title="Drag to resize HUD window (bottom-left)"
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8">
+              <line x1="1" y1="1" x2="7" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="1" y1="4" x2="4" y2="7" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </div>
         </div>
       )}
     </div>

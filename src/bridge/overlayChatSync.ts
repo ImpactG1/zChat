@@ -10,7 +10,7 @@ export function setActiveOverlayConversation(pubkey?: string): void {
 
 /**
  * Synchronizes the active conversation, contacts list for switching, and unread count
- * to the native/desktop overlay.
+ * to the native/desktop overlay with Portal UI metadata.
  */
 export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
   if (preferredPubkey) {
@@ -26,7 +26,8 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
       const contacts = await db.contacts.toArray();
       const groups = await db.groups.toArray();
 
-      const unreadTotal = contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0) +
+      const unreadTotal =
+        contacts.reduce((sum, c) => sum + (c.unreadCount || 0), 0) +
         groups.reduce((sum, g) => sum + (g.unreadCount || 0), 0);
 
       // Build unified conversation list for the Maximized chat switcher
@@ -34,6 +35,7 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
         ...groups.map((g) => ({
           pubkey: g.id,
           alias: g.name ? g.name : 'Squad',
+          tag: `#SQUAD`,
           unreadCount: g.unreadCount || 0,
           lastTimestamp: g.lastTimestamp || 0,
           isGroup: true,
@@ -41,6 +43,7 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
         ...contacts.map((c) => ({
           pubkey: c.pubkey,
           alias: c.alias || `User#${c.pubkey.slice(0, 4)}`,
+          tag: c.tag || `#${c.pubkey.slice(0, 4)}`,
           unreadCount: c.unreadCount || 0,
           lastTimestamp: c.lastTimestamp || 0,
           isGroup: false,
@@ -58,6 +61,15 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
       let messagesJson = '[]';
       const activePubkey = activeItem?.pubkey || '';
 
+      const formatTime = (ts: number) => {
+        try {
+          const d = new Date(ts);
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        } catch {
+          return '';
+        }
+      };
+
       if (activeItem) {
         channelTitle = activeItem.alias;
         if (activeItem.isGroup) {
@@ -67,13 +79,18 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
             .sortBy('timestamp');
 
           messagesJson = JSON.stringify(
-            groupMsgs.slice(-30).map((m) => ({
-              id: m.id,
-              senderTag: m.authorAlias || m.senderTag || 'Teammate',
-              content: m.content,
-              isMe: m.authorAlias === 'You',
-              timestamp: m.timestamp,
-            }))
+            groupMsgs.slice(-35).map((m) => {
+              const isMe = m.authorAlias === 'You';
+              return {
+                id: m.id,
+                senderName: isMe ? 'You' : (m.authorAlias || m.senderTag || 'Teammate'),
+                senderTag: isMe ? '' : (m.senderTag || '#PEER'),
+                content: m.content,
+                isMe,
+                timestamp: m.timestamp,
+                time: formatTime(m.timestamp),
+              };
+            })
           );
         } else {
           const msgs = await db.messages
@@ -82,13 +99,18 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
             .sortBy('timestamp');
 
           messagesJson = JSON.stringify(
-            msgs.slice(-30).map((m) => ({
-              id: m.id,
-              senderTag: m.senderPubkey === activeItem!.pubkey ? activeItem!.alias : 'You',
-              content: m.content,
-              isMe: m.senderPubkey !== activeItem!.pubkey,
-              timestamp: m.timestamp,
-            }))
+            msgs.slice(-35).map((m) => {
+              const isMe = m.senderPubkey !== activeItem!.pubkey;
+              return {
+                id: m.id,
+                senderName: isMe ? 'You' : activeItem!.alias,
+                senderTag: isMe ? '' : activeItem!.tag,
+                content: m.content,
+                isMe,
+                timestamp: m.timestamp,
+                time: formatTime(m.timestamp),
+              };
+            })
           );
         }
       }
@@ -97,6 +119,7 @@ export async function syncOverlayChat(preferredPubkey?: string): Promise<void> {
         contactsList.map((c) => ({
           pubkey: c.pubkey,
           alias: c.alias,
+          tag: c.tag,
           unreadCount: c.unreadCount,
           isGroup: c.isGroup,
         }))
